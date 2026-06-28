@@ -3,9 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
-    <title>TrackORA Driver</title>
-    <!-- QR Scanner Library (lokal) -->
-    <script src="https://cdn.jsdelivr.net/npm/qr-scanner@1.4.2/umd/qr-scanner.min.js"></script>
+    <title>TrackORA Driver v2.0</title>
     <style>
         * { margin: 0; padding: 0; box-sizing: border-box; }
 
@@ -27,12 +25,25 @@
             border-radius: 16px;
             padding: 24px;
             box-shadow: 0 25px 50px rgba(0,0,0,0.4);
+            position: relative;
         }
 
         .app-header { text-align: center; margin-bottom: 28px; }
         .app-logo { font-size: 40px; margin-bottom: 8px; }
         .app-header h1 { font-size: 22px; font-weight: 700; color: #F8FAFC; letter-spacing: -0.5px; }
         .app-header .subtitle { font-size: 12px; color: #64748B; margin-top: 2px; }
+
+        .version-badge {
+            position: absolute;
+            top: 12px;
+            right: 16px;
+            font-size: 10px;
+            color: #64748B;
+            background: #0F172A;
+            padding: 2px 8px;
+            border-radius: 4px;
+            font-weight: 500;
+        }
 
         .input-group { margin-bottom: 12px; }
         .input-group label {
@@ -61,7 +72,6 @@
             70% { box-shadow: 0 0 0 12px rgba(220,38,38,0); }
         }
 
-        /* QR Scanner Video */
         .qr-video-container {
             display: none; margin-bottom: 16px; border-radius: 8px; overflow: hidden;
             border: 2px solid #334155;
@@ -150,6 +160,9 @@
 <body>
 
     <div class="app-container">
+        <!-- VERSION BADGE -->
+        <div class="version-badge">v2.0</div>
+
         <div class="app-header">
             <div class="app-logo">🚛</div>
             <h1>TrackORA Driver</h1>
@@ -165,7 +178,6 @@
             <div class="scan-status" id="scanStatus"></div>
         </div>
 
-        <!-- QR VIDEO -->
         <div class="qr-video-container" id="qrContainer">
             <video id="qr-video" playsinline></video>
         </div>
@@ -206,8 +218,8 @@
         let currentSJ = null, currentStatus = null;
         let startTime = null, startGPS = null, endTime = null, endGPS = null;
         let gpsReady = false, gpsLat = null, gpsLng = null;
-        let qrScanner = null;
         let scannerActive = false;
+        let scanLoopId = null;
 
         // =============================================
         // INIT
@@ -222,7 +234,7 @@
         }
 
         // =============================================
-        // QR SCANNER (qr-scanner library)
+        // QR SCANNER (BarcodeDetector API – no library)
         // =============================================
         function toggleScanner() {
             const container = document.getElementById("qrContainer");
@@ -234,9 +246,8 @@
                 return;
             }
 
-            // Cek apakah QrScanner tersedia
-            if (typeof QrScanner === "undefined") {
-                showToast("Library QR tidak terload. Masukkan manual.", true);
+            if (!('BarcodeDetector' in window)) {
+                showToast("Browser tidak mendukung scan QR. Masukkan manual.", true);
                 return;
             }
 
@@ -248,42 +259,59 @@
             statusEl.className = "scan-status";
 
             const video = document.getElementById("qr-video");
+            const barcodeDetector = new BarcodeDetector({ formats: ['qr_code'] });
 
-            qrScanner = new QrScanner(
-                video,
-                result => {
-                    document.getElementById("inputSJ").value = result.data;
-                    statusEl.textContent = "✅ QR berhasil dipindai";
-                    statusEl.className = "scan-status success";
-                    showToast(`Terbaca: ${result.data}`);
-                    stopScanner();
-                },
-                {
-                    highlightScanRegion: true,
-                    highlightCodeOutline: true,
-                    returnDetailedScanResult: false,
-                    maxScansPerSecond: 5
-                }
-            );
-
-            qrScanner.start().catch(err => {
+            navigator.mediaDevices.getUserMedia({
+                video: { facingMode: "environment", width: { ideal: 640 }, height: { ideal: 480 } },
+                audio: false
+            })
+            .then(stream => {
+                video.srcObject = stream;
+                video.play();
+                scanLoop(barcodeDetector, video);
+            })
+            .catch(() => {
                 statusEl.textContent = "❌ Tidak bisa akses kamera. Masukkan manual.";
                 statusEl.className = "scan-status error";
                 stopScanner();
             });
         }
 
+        function scanLoop(detector, video) {
+            if (!scannerActive) return;
+
+            detector.detect(video)
+                .then(codes => {
+                    if (codes.length > 0) {
+                        document.getElementById("inputSJ").value = codes[0].rawValue;
+                        document.getElementById("scanStatus").textContent = "✅ QR berhasil dipindai";
+                        document.getElementById("scanStatus").className = "scan-status success";
+                        showToast(`Terbaca: ${codes[0].rawValue}`);
+                        stopScanner();
+                    } else {
+                        scanLoopId = requestAnimationFrame(() => scanLoop(detector, video));
+                    }
+                })
+                .catch(() => {
+                    scanLoopId = requestAnimationFrame(() => scanLoop(detector, video));
+                });
+        }
+
         function stopScanner() {
-            if (qrScanner) {
-                qrScanner.stop();
-                qrScanner.destroy();
-                qrScanner = null;
+            scannerActive = false;
+            if (scanLoopId) {
+                cancelAnimationFrame(scanLoopId);
+                scanLoopId = null;
+            }
+            const video = document.getElementById("qr-video");
+            if (video.srcObject) {
+                video.srcObject.getTracks().forEach(track => track.stop());
+                video.srcObject = null;
             }
             document.getElementById("qrContainer").classList.remove("show");
             const btn = document.getElementById("btnScan");
             btn.classList.remove("active");
             btn.textContent = "📷";
-            scannerActive = false;
         }
 
         // =============================================
