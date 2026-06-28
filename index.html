@@ -54,18 +54,6 @@
             transition: background 0.2s; white-space: nowrap;
         }
         .btn-scan:hover { background: #6D28D9; }
-        .btn-scan.active { background: #DC2626; animation: pulse-scan 1.5s infinite; }
-        @keyframes pulse-scan {
-            0%, 100% { box-shadow: 0 0 0 0 rgba(220,38,38,0.4); }
-            70% { box-shadow: 0 0 0 12px rgba(220,38,38,0); }
-        }
-
-        .qr-reader-container {
-            display: none; margin-bottom: 16px; border-radius: 8px; overflow: hidden;
-            border: 2px solid #334155;
-        }
-        .qr-reader-container.show { display: block; }
-        #qr-reader { width: 100%; }
 
         .status-card {
             background: #0F172A; border: 1px solid #334155; border-radius: 12px;
@@ -156,13 +144,11 @@
             </div>
         </div>
 
-        <!-- NATIVE CAMERA FALLBACK -->
+        <!-- NATIVE CAMERA -->
         <input type="file" id="nativeCamera" accept="image/*" capture="environment" style="display:none" onchange="handleNativePhoto(event)">
 
-        <!-- QR SCANNER -->
-        <div class="qr-reader-container" id="qrContainer">
-            <div id="qr-reader"></div>
-        </div>
+        <!-- TEMPAT DEKODE QR -->
+        <div id="qr-reader-temp" style="display:none;"></div>
 
         <!-- GPS -->
         <div class="gps-indicator" id="gpsIndicator">
@@ -201,7 +187,6 @@
         let currentSJ = null, currentStatus = null;
         let startTime = null, startGPS = null, endTime = null, endGPS = null;
         let gpsReady = false, gpsLat = null, gpsLng = null;
-        let html5QrCode = null, scannerActive = false;
 
         function init() {
             loadHistory();
@@ -213,14 +198,14 @@
         }
 
         // =============================================
-        // QR SCANNER (native fallback)
+        // QR SCANNER (native camera → decode foto)
         // =============================================
         function toggleScanner() {
             const nativeInput = document.getElementById("nativeCamera");
             if (nativeInput) {
                 nativeInput.click();
             } else {
-                startQRScanner();
+                showToast("Kamera tidak tersedia. Masukkan manual.", true);
             }
         }
 
@@ -230,61 +215,22 @@
             showToast("Memproses gambar...");
 
             if (typeof Html5Qrcode === "undefined") {
-                showToast("Library QR tidak tersedia. Masukkan manual.", true);
+                showToast("Pemindai QR tidak tersedia. Masukkan No. SJ manual.", true);
                 event.target.value = "";
                 return;
             }
 
-            const html5QrCodeTemp = new Html5Qrcode("qr-reader");
+            const html5QrCodeTemp = new Html5Qrcode("qr-reader-temp");
             html5QrCodeTemp.scanFile(file, true)
                 .then(decodedText => {
                     document.getElementById("inputSJ").value = decodedText;
                     showToast(`Terbaca: ${decodedText}`);
                 })
                 .catch(() => {
-                    showToast("QR Code tidak terdeteksi. Coba lagi.", true);
+                    showToast("QR Code tidak terdeteksi. Masukkan manual.", true);
                 });
 
             event.target.value = "";
-        }
-
-        function startQRScanner() {
-            const container = document.getElementById("qrContainer");
-            const btn = document.getElementById("btnScan");
-            container.classList.add("show");
-            btn.classList.add("active");
-            btn.textContent = "✕";
-            scannerActive = true;
-            html5QrCode = new Html5Qrcode("qr-reader");
-            html5QrCode.start(
-                { facingMode: "environment" },
-                { fps: 10, qrbox: { width: 250, height: 250 }, aspectRatio: 1 },
-                onScanSuccess,
-                onScanError
-            ).catch(() => {
-                showToast("Tidak bisa akses kamera. Upload foto QR.", true);
-                stopScanner();
-            });
-        }
-
-        function onScanSuccess(decodedText) {
-            document.getElementById("inputSJ").value = decodedText;
-            showToast(`Terbaca: ${decodedText}`);
-            stopScanner();
-        }
-
-        function onScanError() {}
-
-        function stopScanner() {
-            if (html5QrCode) {
-                html5QrCode.stop().catch(() => {});
-                html5QrCode = null;
-            }
-            document.getElementById("qrContainer").classList.remove("show");
-            const btn = document.getElementById("btnScan");
-            btn.classList.remove("active");
-            btn.textContent = "📷";
-            scannerActive = false;
         }
 
         // =============================================
@@ -344,7 +290,6 @@
             document.getElementById("btnStart").disabled = true;
             document.getElementById("btnFinish").disabled = false;
             document.getElementById("inputSJ").disabled = true;
-            stopScanner();
             showToast("Perjalanan dimulai.");
         }
 
@@ -367,7 +312,6 @@
         // RESET
         // =============================================
         function resetForm() {
-            stopScanner();
             currentSJ = null; currentStatus = null;
             startTime = null; startGPS = null; endTime = null; endGPS = null;
             const input = document.getElementById("inputSJ");
