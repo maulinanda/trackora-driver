@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
-    <title>TrackORA Driver v3.3</title>
+    <title>TrackORA Driver v3.4</title>
     <style>
         * { margin: 0; padding: 0; box-sizing: border-box; }
 
@@ -185,7 +185,7 @@
 <body>
 
     <div class="app-container">
-        <div class="version-badge">v3.3</div>
+        <div class="version-badge">v3.4</div>
         <div class="online-indicator">
             <div class="online-dot" id="onlineDot"></div>
             <span id="onlineText">Cek koneksi...</span>
@@ -244,15 +244,13 @@
         // KONFIGURASI
         // =============================================
         const API_URL = "https://script.google.com/macros/s/AKfycbx3yAbqIKIQxgCeFreOG1Rhrcuz60DDK3PSOe-DKQAjn2bL5jGIuZyP6tkP3qK4L-Ge/exec";
-
         const STORAGE_KEY = "trackora_driver_history";
         const PENDING_KEY = "trackora_driver_pending";
+        const ACTIVE_TRIP_KEY = "trackora_driver_active_trip";
 
         let sjList = [];
         let currentTrip = [];
         let tripActive = false;
-        let tripStartTime = null;
-        let tripStartGPS = null;
         let gpsReady = false, gpsLat = null, gpsLng = null;
         let scannerActive = false, scanLoopId = null;
         let isOnline = false;
@@ -268,6 +266,9 @@
             document.getElementById("inputSJ").focus();
             setInterval(checkOnlineStatus, 10000);
             syncPending();
+            
+            // Pulihkan perjalanan yang sedang berlangsung (jika ada)
+            loadActiveTrip();
         }
 
         function checkOnlineStatus() {
@@ -291,6 +292,49 @@
         }
 
         // =============================================
+        // ACTIVE TRIP PERSISTENCE
+        // =============================================
+        function saveActiveTrip() {
+            if (currentTrip.length > 0 && tripActive) {
+                localStorage.setItem(ACTIVE_TRIP_KEY, JSON.stringify({
+                    currentTrip: currentTrip,
+                    sjList: sjList,
+                    tripActive: tripActive
+                }));
+            }
+        }
+
+        function loadActiveTrip() {
+            const saved = localStorage.getItem(ACTIVE_TRIP_KEY);
+            if (!saved) return;
+            
+            try {
+                const data = JSON.parse(saved);
+                if (data.tripActive && data.currentTrip && data.currentTrip.length > 0) {
+                    currentTrip = data.currentTrip;
+                    sjList = data.sjList || [];
+                    tripActive = data.tripActive;
+                    
+                    // Tampilkan trip section
+                    document.getElementById("inputSection").style.display = "none";
+                    document.getElementById("sjListSection").classList.remove("show");
+                    document.getElementById("tripSection").classList.add("show");
+                    document.getElementById("historySection").classList.add("show");
+                    
+                    renderTripList();
+                    showToast("Perjalanan sebelumnya dipulihkan.");
+                }
+            } catch (e) {
+                // Data corrupt, hapus
+                localStorage.removeItem(ACTIVE_TRIP_KEY);
+            }
+        }
+
+        function clearActiveTrip() {
+            localStorage.removeItem(ACTIVE_TRIP_KEY);
+        }
+
+        // =============================================
         // ADD SJ
         // =============================================
         function addSJ() {
@@ -305,9 +349,9 @@
         }
 
         function removeSJ(index) {
-            const removed = sjList.splice(index, 1)[0];
+            sjList.splice(index, 1);
             renderSJList();
-            showToast(`❌ ${removed} dihapus`);
+            showToast("Surat Jalan dihapus");
         }
 
         function renderSJList() {
@@ -323,17 +367,17 @@
         }
 
         // =============================================
-        // START TRIP (check-in)
+        // START TRIP
         // =============================================
         function startTrip() {
             if (sjList.length === 0) { showToast("Tambahkan minimal 1 Surat Jalan", true); return; }
-            tripStartTime = formatDateTime();
-            tripStartGPS = getGPSString();
+            const startTime = formatDateTime();
+            const startGPS = getGPSString();
             currentTrip = sjList.map(sj => ({
                 sj,
                 status: 'transit',
-                checkinTime: tripStartTime,
-                checkinGPS: tripStartGPS,
+                checkinTime: startTime,
+                checkinGPS: startGPS,
                 endTime: null,
                 endGPS: null,
                 synced: false,
@@ -346,9 +390,8 @@
             document.getElementById("historySection").classList.add("show");
             stopScanner();
             renderTripList();
+            saveActiveTrip();
             showToast(`${sjList.length} surat jalan dimulai.`);
-
-            // Kirim data check-in ke server
             currentTrip.forEach((trip, index) => {
                 kirimCheckinKeServer(trip, index);
             });
@@ -377,6 +420,7 @@
             });
             container.innerHTML = html;
             updateSyncButton();
+            saveActiveTrip();
 
             const allDone = currentTrip.every(t => t.status === 'delivered' && t.synced);
             if (allDone) {
@@ -391,6 +435,8 @@
                         synced: trip.synced
                     });
                 });
+                // Hapus active trip setelah semua selesai
+                clearActiveTrip();
             }
         }
 
@@ -575,7 +621,7 @@
         // RESET
         // =============================================
         function resetForm() {
-            stopScanner(); sjList = []; currentTrip = []; tripActive = false; tripStartTime = null; tripStartGPS = null;
+            stopScanner(); sjList = []; currentTrip = []; tripActive = false;
             document.getElementById("inputSJ").value = "";
             document.getElementById("inputSection").style.display = "block";
             document.getElementById("sjListSection").classList.remove("show");
@@ -584,6 +630,7 @@
             document.getElementById("scanStatus").textContent = "";
             document.getElementById("scanStatus").className = "scan-status";
             document.getElementById("inputSJ").focus();
+            clearActiveTrip();
             requestGPS(); updateSyncButton();
             showToast("Form di-reset.");
         }
