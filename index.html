@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
-    <title>TrackORA Driver v3.0</title>
+    <title>TrackORA Driver v3.1</title>
     <style>
         * { margin: 0; padding: 0; box-sizing: border-box; }
 
@@ -50,16 +50,15 @@
             display: block; font-size: 12px; font-weight: 600; color: #94A3B8;
             margin-bottom: 6px; text-transform: uppercase; letter-spacing: 0.5px;
         }
-        .input-row { display: flex; gap: 8px; }
-        .input-group textarea, .input-group input {
-            width: 100%; padding: 14px 16px; background: #0F172A;
+        .input-row { display: flex; gap: 8px; align-items: center; }
+        .input-group input {
+            flex: 1; padding: 14px 16px; background: #0F172A;
             border: 1px solid #334155; border-radius: 8px; color: #F8FAFC;
             font-size: 16px; font-family: 'SF Mono', 'Courier New', monospace;
             outline: none; transition: border-color 0.2s;
         }
-        .input-group textarea { resize: vertical; min-height: 80px; }
-        .input-group textarea:focus, .input-group input:focus { border-color: #2563EB; box-shadow: 0 0 0 3px rgba(37,99,235,0.15); }
-        .input-group textarea::placeholder, .input-group input::placeholder { color: #475569; }
+        .input-group input:focus { border-color: #2563EB; box-shadow: 0 0 0 3px rgba(37,99,235,0.15); }
+        .input-group input::placeholder { color: #475569; }
 
         .btn-scan {
             padding: 14px 16px; background: #7C3AED; color: white;
@@ -87,7 +86,36 @@
         .scan-status.success { color: #059669; }
         .scan-status.error { color: #DC2626; }
 
-        /* TRIP LIST */
+        /* SJ LIST */
+        .sj-list-section { display: none; margin-top: 16px; }
+        .sj-list-section.show { display: block; }
+        .sj-list-header {
+            display: flex; justify-content: space-between; align-items: center;
+            margin-bottom: 10px;
+        }
+        .sj-list-header span {
+            font-size: 12px; color: #94A3B8; font-weight: 600;
+        }
+        .sj-list-item {
+            background: #0F172A; border: 1px solid #334155; border-radius: 8px;
+            padding: 12px 14px; margin-bottom: 8px;
+            display: flex; justify-content: space-between; align-items: center;
+            font-family: 'SF Mono', 'Courier New', monospace;
+            font-size: 14px; color: #F8FAFC;
+        }
+        .sj-list-item .remove-sj {
+            color: #DC2626; cursor: pointer; font-size: 16px; padding: 4px;
+        }
+
+        .btn-add-sj {
+            width: 100%; padding: 12px; background: #334155; color: #CBD5E1;
+            border: 1px dashed #64748B; border-radius: 8px; font-size: 14px;
+            cursor: pointer; text-align: center; margin-top: 8px;
+            transition: all 0.2s;
+        }
+        .btn-add-sj:hover { background: #475569; }
+
+        /* TRIP SECTION */
         .trip-section { display: none; }
         .trip-section.show { display: block; }
         .trip-item {
@@ -167,7 +195,7 @@
 
     <div class="app-container">
         <!-- VERSION BADGE -->
-        <div class="version-badge">v3.0</div>
+        <div class="version-badge">v3.1</div>
 
         <div class="app-header">
             <div class="app-logo">🚛</div>
@@ -175,15 +203,13 @@
             <p class="subtitle">Check-in & Check-out Pengiriman</p>
         </div>
 
-        <!-- INPUT SURAT JALAN -->
+        <!-- INPUT SATU SURAT JALAN -->
         <div class="input-group" id="inputSection">
-            <label>No. Surat Jalan (satu per baris)</label>
-            <div class="input-row" style="flex-direction:column;gap:8px;">
-                <textarea id="multiSJ" placeholder="Masukkan No. Surat Jalan&#10;Satu surat jalan per baris&#10;Contoh:&#10;SJ-001&#10;SJ-002" autocomplete="off"></textarea>
-                <div style="display:flex;gap:8px;">
-                    <button class="btn-scan" id="btnScan" onclick="toggleScanner()" title="Scan QR">📷</button>
-                    <button class="btn btn-start" onclick="setupTrip()">▶ Mulai Trip</button>
-                </div>
+            <label>No. Surat Jalan</label>
+            <div class="input-row">
+                <input type="text" id="inputSJ" placeholder="Scan atau ketik No. SJ" autocomplete="off">
+                <button class="btn-scan" id="btnScan" onclick="toggleScanner()" title="Scan QR">📷</button>
+                <button class="btn btn-start" onclick="addSJ()" style="flex:0;min-width:auto;padding:14px 16px;font-size:18px;">+</button>
             </div>
             <div class="scan-status" id="scanStatus"></div>
         </div>
@@ -191,6 +217,17 @@
         <!-- QR VIDEO -->
         <div class="qr-video-container" id="qrContainer">
             <video id="qr-video" playsinline></video>
+        </div>
+
+        <!-- SJ LIST -->
+        <div class="sj-list-section" id="sjListSection">
+            <div class="sj-list-header">
+                <span>📋 Daftar Surat Jalan (<span id="sjCount">0</span>)</span>
+            </div>
+            <div id="sjList"></div>
+            <button class="btn btn-start" id="btnStartTrip" onclick="startTrip()" style="width:100%;margin-top:12px;" disabled>
+                ▶ Mulai Perjalanan
+            </button>
         </div>
 
         <!-- GPS -->
@@ -201,7 +238,7 @@
 
         <!-- TRIP SECTION -->
         <div class="trip-section" id="tripSection">
-            <p style="font-size:12px;color:#94A3B8;margin-bottom:12px;text-align:center;">🟢 Klik SJ untuk check-out | 🟣 Sudah tiba</p>
+            <p style="font-size:12px;color:#94A3B8;margin-bottom:12px;text-align:center;">🟣 Klik SJ untuk check-out | ✅ Sudah tiba</p>
             <div id="tripList"></div>
             <div class="btn-row">
                 <button class="btn btn-reset" onclick="resetForm()" title="Reset">↺ Trip Baru</button>
@@ -224,7 +261,8 @@
         // STATE
         // =============================================
         const STORAGE_KEY = "trackora_driver_history";
-        let currentTrip = [];          // array of { sj: string, status: 'transit'|'delivered', startTime, startGPS, endTime, endGPS }
+        let sjList = [];               // array string No. SJ yang sudah di-add
+        let currentTrip = [];          // array of { sj, status, startTime, startGPS, endTime, endGPS }
         let tripActive = false;
         let gpsReady = false, gpsLat = null, gpsLng = null;
         let scannerActive = false;
@@ -236,10 +274,168 @@
         function init() {
             loadHistory();
             requestGPS();
-            document.getElementById("inputSJ")?.addEventListener("keypress", e => {
-                if (e.key === "Enter") mulaiPerjalanan();
+            document.getElementById("inputSJ").addEventListener("keypress", e => {
+                if (e.key === "Enter") addSJ();
             });
-            document.getElementById("multiSJ").focus();
+            document.getElementById("inputSJ").focus();
+        }
+
+        // =============================================
+        // ADD SJ (satu per satu)
+        // =============================================
+        function addSJ() {
+            const sj = document.getElementById("inputSJ").value.trim();
+            if (!sj) {
+                showToast("Masukkan No. Surat Jalan", true);
+                return;
+            }
+
+            // Cek duplikat
+            if (sjList.includes(sj)) {
+                showToast("No. Surat Jalan sudah ada di daftar", true);
+                document.getElementById("inputSJ").value = "";
+                document.getElementById("inputSJ").focus();
+                return;
+            }
+
+            sjList.push(sj);
+            document.getElementById("inputSJ").value = "";
+            document.getElementById("inputSJ").focus();
+            renderSJList();
+            showToast(`✅ ${sj} ditambahkan`);
+        }
+
+        // =============================================
+        // REMOVE SJ
+        // =============================================
+        function removeSJ(index) {
+            const removed = sjList.splice(index, 1)[0];
+            renderSJList();
+            showToast(`❌ ${removed} dihapus`);
+            document.getElementById("inputSJ").focus();
+        }
+
+        // =============================================
+        // RENDER SJ LIST
+        // =============================================
+        function renderSJList() {
+            const container = document.getElementById("sjList");
+            const section = document.getElementById("sjListSection");
+            const btnStart = document.getElementById("btnStartTrip");
+            const countEl = document.getElementById("sjCount");
+
+            if (sjList.length === 0) {
+                section.classList.remove("show");
+                return;
+            }
+
+            section.classList.add("show");
+            countEl.textContent = sjList.length;
+            btnStart.disabled = false;
+
+            let html = "";
+            sjList.forEach((sj, index) => {
+                html += `
+                    <div class="sj-list-item">
+                        <span>📋 ${sj}</span>
+                        <span class="remove-sj" onclick="event.stopPropagation();removeSJ(${index})">✕</span>
+                    </div>
+                `;
+            });
+            container.innerHTML = html;
+        }
+
+        // =============================================
+        // START TRIP (check-in semua SJ sekaligus)
+        // =============================================
+        function startTrip() {
+            if (sjList.length === 0) {
+                showToast("Tambahkan minimal 1 Surat Jalan", true);
+                return;
+            }
+
+            const startTime = formatDateTime();
+            const startGPS = getGPSString();
+
+            currentTrip = sjList.map(sj => ({
+                sj,
+                status: 'transit',
+                startTime,
+                startGPS,
+                endTime: null,
+                endGPS: null
+            }));
+
+            tripActive = true;
+
+            // Sembunyikan input & SJ list
+            document.getElementById("inputSection").style.display = "none";
+            document.getElementById("sjListSection").classList.remove("show");
+            document.getElementById("tripSection").classList.add("show");
+            document.getElementById("historySection").classList.add("show");
+            stopScanner();
+
+            renderTripList();
+            showToast(`${sjList.length} surat jalan dimulai.`);
+        }
+
+        // =============================================
+        // RENDER TRIP LIST
+        // =============================================
+        function renderTripList() {
+            const container = document.getElementById("tripList");
+            let html = "";
+
+            currentTrip.forEach((trip, index) => {
+                const delivered = trip.status === 'delivered';
+                html += `
+                    <div class="trip-item ${delivered ? 'delivered' : ''}" onclick="${delivered ? '' : `checkOut(${index})`}">
+                        <div>
+                            <div class="sj-code">📋 ${trip.sj}</div>
+                            <div style="font-size:10px;color:#94A3B8;margin-top:2px;">Mulai: ${trip.startTime}</div>
+                            ${delivered ? `<div style="font-size:10px;color:#059669;margin-top:2px;">Tiba: ${trip.endTime}</div>` : ''}
+                        </div>
+                        <span class="sj-status ${delivered ? 'status-delivered' : 'status-transit'}">
+                            ${delivered ? '✅ Tiba' : '🚛 Transit'}
+                        </span>
+                    </div>
+                `;
+            });
+
+            container.innerHTML = html;
+
+            const allDelivered = currentTrip.every(t => t.status === 'delivered');
+            if (allDelivered) {
+                showToast("Semua surat jalan telah tiba. Trip selesai! 🎉");
+                currentTrip.forEach(trip => {
+                    saveHistory({
+                        sj: trip.sj,
+                        startTime: trip.startTime,
+                        startGPS: trip.startGPS,
+                        endTime: trip.endTime,
+                        endGPS: trip.endGPS
+                    });
+                });
+            }
+        }
+
+        // =============================================
+        // CHECK-OUT SATU SJ
+        // =============================================
+        function checkOut(index) {
+            const trip = currentTrip[index];
+            if (!trip || trip.status === 'delivered') return;
+
+            if (!confirm(`Konfirmasi tiba di tujuan untuk:\n${trip.sj}\n\nKlik OK untuk check-out.`)) {
+                return;
+            }
+
+            trip.status = 'delivered';
+            trip.endTime = formatDateTime();
+            trip.endGPS = getGPSString();
+
+            renderTripList();
+            showToast(`✅ ${trip.sj} telah tiba.`);
         }
 
         // =============================================
@@ -291,20 +487,13 @@
             detector.detect(video)
                 .then(codes => {
                     if (codes.length > 0) {
-                        // Tambahkan hasil scan ke textarea
-                        const textarea = document.getElementById("multiSJ");
-                        const current = textarea.value.trim();
-                        const newSJ = codes[0].rawValue;
-                        textarea.value = current ? current + "\n" + newSJ : newSJ;
-                        document.getElementById("scanStatus").textContent = `✅ Terbaca: ${newSJ}`;
+                        document.getElementById("inputSJ").value = codes[0].rawValue;
+                        document.getElementById("scanStatus").textContent = `✅ Terbaca: ${codes[0].rawValue}`;
                         document.getElementById("scanStatus").className = "scan-status success";
-                        showToast(`Ditambahkan: ${newSJ}`);
-                        // Jangan stop scanner, biar bisa scan lagi
-                        setTimeout(() => {
-                            document.getElementById("scanStatus").textContent = "Arahkan kamera ke QR code...";
-                            document.getElementById("scanStatus").className = "scan-status";
-                        }, 1500);
-                        scanLoopId = requestAnimationFrame(() => scanLoop(detector, video));
+                        showToast(`Terbaca: ${codes[0].rawValue}`);
+                        stopScanner();
+                        // Auto-add setelah scan
+                        setTimeout(() => addSJ(), 500);
                     } else {
                         scanLoopId = requestAnimationFrame(() => scanLoop(detector, video));
                     }
@@ -329,110 +518,6 @@
             const btn = document.getElementById("btnScan");
             btn.classList.remove("active");
             btn.textContent = "📷";
-        }
-
-        // =============================================
-        // SETUP TRIP (Check-in semua SJ sekaligus)
-        // =============================================
-        function setupTrip() {
-            const raw = document.getElementById("multiSJ").value.trim();
-            if (!raw) {
-                showToast("Masukkan minimal 1 No. Surat Jalan", true);
-                return;
-            }
-
-            const sjList = raw.split("\n").map(s => s.trim()).filter(s => s !== "");
-            if (sjList.length === 0) {
-                showToast("Masukkan minimal 1 No. Surat Jalan", true);
-                return;
-            }
-
-            const startTime = formatDateTime();
-            const startGPS = getGPSString();
-
-            currentTrip = sjList.map(sj => ({
-                sj,
-                status: 'transit',
-                startTime,
-                startGPS,
-                endTime: null,
-                endGPS: null
-            }));
-
-            tripActive = true;
-
-            // Sembunyikan input, tampilkan trip list
-            document.getElementById("inputSection").style.display = "none";
-            document.getElementById("tripSection").classList.add("show");
-            document.getElementById("historySection").classList.add("show");
-            stopScanner();
-
-            renderTripList();
-            showToast(`${sjList.length} surat jalan dimulai.`);
-        }
-
-        // =============================================
-        // RENDER TRIP LIST
-        // =============================================
-        function renderTripList() {
-            const container = document.getElementById("tripList");
-            let html = "";
-
-            currentTrip.forEach((trip, index) => {
-                const delivered = trip.status === 'delivered';
-                html += `
-                    <div class="trip-item ${delivered ? 'delivered' : ''}" onclick="${delivered ? '' : `checkOut(${index})`}">
-                        <div>
-                            <div class="sj-code">📋 ${trip.sj}</div>
-                            <div style="font-size:10px;color:#94A3B8;margin-top:2px;">Mulai: ${trip.startTime}</div>
-                            ${delivered ? `<div style="font-size:10px;color:#059669;margin-top:2px;">Tiba: ${trip.endTime}</div>` : ''}
-                        </div>
-                        <span class="sj-status ${delivered ? 'status-delivered' : 'status-transit'}">
-                            ${delivered ? '✅ Tiba' : '🚛 Transit'}
-                        </span>
-                    </div>
-                `;
-            });
-
-            container.innerHTML = html;
-
-            // Cek apakah semua sudah delivered
-            const allDelivered = currentTrip.every(t => t.status === 'delivered');
-            if (allDelivered) {
-                showToast("Semua surat jalan telah tiba. Trip selesai! 🎉");
-                // Simpan semua ke history
-                currentTrip.forEach(trip => {
-                    saveHistory({
-                        sj: trip.sj,
-                        startTime: trip.startTime,
-                        startGPS: trip.startGPS,
-                        endTime: trip.endTime,
-                        endGPS: trip.endGPS
-                    });
-                });
-            }
-        }
-
-        // =============================================
-        // CHECK-OUT SATU SJ
-        // =============================================
-        function checkOut(index) {
-            const trip = currentTrip[index];
-            if (!trip || trip.status === 'delivered') return;
-
-            const sjName = trip.sj;
-
-            // Konfirmasi
-            if (!confirm(`Konfirmasi tiba di tujuan untuk:\n${sjName}\n\nKlik OK untuk check-out.`)) {
-                return;
-            }
-
-            trip.status = 'delivered';
-            trip.endTime = formatDateTime();
-            trip.endGPS = getGPSString();
-
-            renderTripList();
-            showToast(`✅ ${sjName} telah tiba.`);
         }
 
         // =============================================
@@ -478,15 +563,17 @@
         // =============================================
         function resetForm() {
             stopScanner();
+            sjList = [];
             currentTrip = [];
             tripActive = false;
-            document.getElementById("multiSJ").value = "";
+            document.getElementById("inputSJ").value = "";
             document.getElementById("inputSection").style.display = "block";
+            document.getElementById("sjListSection").classList.remove("show");
             document.getElementById("tripSection").classList.remove("show");
             document.getElementById("historySection").classList.remove("show");
             document.getElementById("scanStatus").textContent = "";
             document.getElementById("scanStatus").className = "scan-status";
-            document.getElementById("multiSJ").focus();
+            document.getElementById("inputSJ").focus();
             requestGPS();
             showToast("Form di-reset.");
         }
