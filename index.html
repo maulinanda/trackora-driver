@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
-    <title>TrackORA Driver v3.1</title>
+    <title>TrackORA Driver v3.3</title>
     <style>
         * { margin: 0; padding: 0; box-sizing: border-box; }
 
@@ -34,16 +34,17 @@
         .app-header .subtitle { font-size: 12px; color: #64748B; margin-top: 2px; }
 
         .version-badge {
-            position: absolute;
-            top: 12px;
-            right: 16px;
-            font-size: 10px;
-            color: #64748B;
-            background: #0F172A;
-            padding: 2px 8px;
-            border-radius: 4px;
-            font-weight: 500;
+            position: absolute; top: 12px; right: 16px;
+            font-size: 10px; color: #64748B; background: #0F172A;
+            padding: 2px 8px; border-radius: 4px; font-weight: 500;
         }
+
+        .online-indicator {
+            position: absolute; top: 12px; left: 16px;
+            display: flex; align-items: center; gap: 4px; font-size: 10px; color: #64748B;
+        }
+        .online-dot { width: 6px; height: 6px; border-radius: 50%; background: #DC2626; }
+        .online-dot.online { background: #059669; }
 
         .input-group { margin-bottom: 12px; }
         .input-group label {
@@ -80,22 +81,15 @@
         #qr-video { width: 100%; display: block; }
 
         .scan-status {
-            font-size: 11px; color: #64748B; margin-top: 6px; text-align: center;
-            min-height: 16px;
+            font-size: 11px; color: #64748B; margin-top: 6px; text-align: center; min-height: 16px;
         }
         .scan-status.success { color: #059669; }
         .scan-status.error { color: #DC2626; }
 
-        /* SJ LIST */
         .sj-list-section { display: none; margin-top: 16px; }
         .sj-list-section.show { display: block; }
-        .sj-list-header {
-            display: flex; justify-content: space-between; align-items: center;
-            margin-bottom: 10px;
-        }
-        .sj-list-header span {
-            font-size: 12px; color: #94A3B8; font-weight: 600;
-        }
+        .sj-list-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px; }
+        .sj-list-header span { font-size: 12px; color: #94A3B8; font-weight: 600; }
         .sj-list-item {
             background: #0F172A; border: 1px solid #334155; border-radius: 8px;
             padding: 12px 14px; margin-bottom: 8px;
@@ -103,19 +97,8 @@
             font-family: 'SF Mono', 'Courier New', monospace;
             font-size: 14px; color: #F8FAFC;
         }
-        .sj-list-item .remove-sj {
-            color: #DC2626; cursor: pointer; font-size: 16px; padding: 4px;
-        }
+        .sj-list-item .remove-sj { color: #DC2626; cursor: pointer; font-size: 16px; padding: 4px; }
 
-        .btn-add-sj {
-            width: 100%; padding: 12px; background: #334155; color: #CBD5E1;
-            border: 1px dashed #64748B; border-radius: 8px; font-size: 14px;
-            cursor: pointer; text-align: center; margin-top: 8px;
-            transition: all 0.2s;
-        }
-        .btn-add-sj:hover { background: #475569; }
-
-        /* TRIP SECTION */
         .trip-section { display: none; }
         .trip-section.show { display: block; }
         .trip-item {
@@ -130,11 +113,11 @@
             font-weight: 600; color: #F8FAFC; font-size: 14px;
         }
         .trip-item .sj-status {
-            font-size: 11px; font-weight: 600; padding: 4px 10px; border-radius: 4px;
-            text-transform: uppercase;
+            font-size: 11px; font-weight: 600; padding: 4px 10px; border-radius: 4px; text-transform: uppercase;
         }
         .status-transit { background: #2563EB; color: #EFF6FF; }
         .status-delivered { background: #059669; color: #ECFDF5; }
+        .status-pending { background: #D97706; color: #FFF7ED; }
 
         .btn-row { display: flex; gap: 10px; flex-wrap: wrap; margin-top: 16px; }
         .btn {
@@ -147,11 +130,18 @@
         .btn-start:disabled { background: #334155; color: #64748B; cursor: not-allowed; }
         .btn-reset { background: #334155; color: #94A3B8; flex: 0; min-width: auto; padding: 14px 16px; }
         .btn-reset:hover { background: #475569; color: #CBD5E1; }
+        .btn-sync {
+            background: #D97706; color: white; flex: 0; min-width: auto; padding: 14px 16px;
+            font-size: 12px; display: none;
+        }
+        .btn-sync.show { display: block; }
 
-        /* HISTORY */
+        .pending-badge {
+            font-size: 10px; color: #D97706; margin-left: 6px;
+        }
+
         .history-section {
-            margin-top: 28px; border-top: 1px solid #334155; padding-top: 20px;
-            display: none;
+            margin-top: 28px; border-top: 1px solid #334155; padding-top: 20px; display: none;
         }
         .history-section.show { display: block; }
         .history-section h3 {
@@ -167,6 +157,7 @@
         }
         .history-item .times { color: #94A3B8; margin-top: 4px; font-size: 11px; }
         .history-item .gps { color: #64748B; font-size: 10px; }
+        .history-item .sync-status { font-size: 10px; margin-top: 2px; }
         .history-empty { text-align: center; color: #475569; font-size: 13px; padding: 20px; }
 
         .toast {
@@ -194,8 +185,11 @@
 <body>
 
     <div class="app-container">
-        <!-- VERSION BADGE -->
-        <div class="version-badge">v3.1</div>
+        <div class="version-badge">v3.3</div>
+        <div class="online-indicator">
+            <div class="online-dot" id="onlineDot"></div>
+            <span id="onlineText">Cek koneksi...</span>
+        </div>
 
         <div class="app-header">
             <div class="app-logo">🚛</div>
@@ -203,7 +197,6 @@
             <p class="subtitle">Check-in & Check-out Pengiriman</p>
         </div>
 
-        <!-- INPUT SATU SURAT JALAN -->
         <div class="input-group" id="inputSection">
             <label>No. Surat Jalan</label>
             <div class="input-row">
@@ -214,43 +207,33 @@
             <div class="scan-status" id="scanStatus"></div>
         </div>
 
-        <!-- QR VIDEO -->
         <div class="qr-video-container" id="qrContainer">
             <video id="qr-video" playsinline></video>
         </div>
 
-        <!-- SJ LIST -->
         <div class="sj-list-section" id="sjListSection">
-            <div class="sj-list-header">
-                <span>📋 Daftar Surat Jalan (<span id="sjCount">0</span>)</span>
-            </div>
+            <div class="sj-list-header"><span>📋 Daftar Surat Jalan (<span id="sjCount">0</span>)</span></div>
             <div id="sjList"></div>
-            <button class="btn btn-start" id="btnStartTrip" onclick="startTrip()" style="width:100%;margin-top:12px;" disabled>
-                ▶ Mulai Perjalanan
-            </button>
+            <button class="btn btn-start" id="btnStartTrip" onclick="startTrip()" style="width:100%;margin-top:12px;" disabled>▶ Mulai Perjalanan</button>
         </div>
 
-        <!-- GPS -->
         <div class="gps-indicator" id="gpsIndicator">
             <div class="gps-dot" id="gpsDot"></div>
             <span id="gpsText">Menunggu GPS...</span>
         </div>
 
-        <!-- TRIP SECTION -->
         <div class="trip-section" id="tripSection">
-            <p style="font-size:12px;color:#94A3B8;margin-bottom:12px;text-align:center;">🟣 Klik SJ untuk check-out | ✅ Sudah tiba</p>
+            <p style="font-size:12px;color:#94A3B8;margin-bottom:12px;text-align:center;">🟣 Klik SJ untuk check-out | ✅ Tiba | 🟠 Pending sync</p>
             <div id="tripList"></div>
             <div class="btn-row">
+                <button class="btn btn-sync" id="btnSync" onclick="syncPending()">🔄 Sync</button>
                 <button class="btn btn-reset" onclick="resetForm()" title="Reset">↺ Trip Baru</button>
             </div>
         </div>
 
-        <!-- HISTORY -->
         <div class="history-section" id="historySection">
             <h3>📋 Riwayat Hari Ini</h3>
-            <div id="historyList">
-                <div class="history-empty">Belum ada pengiriman hari ini</div>
-            </div>
+            <div id="historyList"><div class="history-empty">Belum ada pengiriman hari ini</div></div>
         </div>
     </div>
 
@@ -258,15 +241,21 @@
 
     <script>
         // =============================================
-        // STATE
+        // KONFIGURASI
         // =============================================
+        const API_URL = "https://script.google.com/macros/s/AKfycbx3yAbqIKIQxgCeFreOG1Rhrcuz60DDK3PSOe-DKQAjn2bL5jGIuZyP6tkP3qK4L-Ge/exec";
+
         const STORAGE_KEY = "trackora_driver_history";
-        let sjList = [];               // array string No. SJ yang sudah di-add
-        let currentTrip = [];          // array of { sj, status, startTime, startGPS, endTime, endGPS }
+        const PENDING_KEY = "trackora_driver_pending";
+
+        let sjList = [];
+        let currentTrip = [];
         let tripActive = false;
+        let tripStartTime = null;
+        let tripStartGPS = null;
         let gpsReady = false, gpsLat = null, gpsLng = null;
-        let scannerActive = false;
-        let scanLoopId = null;
+        let scannerActive = false, scanLoopId = null;
+        let isOnline = false;
 
         // =============================================
         // INIT
@@ -274,30 +263,40 @@
         function init() {
             loadHistory();
             requestGPS();
-            document.getElementById("inputSJ").addEventListener("keypress", e => {
-                if (e.key === "Enter") addSJ();
-            });
+            checkOnlineStatus();
+            document.getElementById("inputSJ").addEventListener("keypress", e => { if (e.key === "Enter") addSJ(); });
             document.getElementById("inputSJ").focus();
+            setInterval(checkOnlineStatus, 10000);
+            syncPending();
+        }
+
+        function checkOnlineStatus() {
+            const dot = document.getElementById("onlineDot");
+            const text = document.getElementById("onlineText");
+            isOnline = navigator.onLine;
+            dot.classList.toggle("online", isOnline);
+            text.textContent = isOnline ? "Online" : "Offline";
+            updateSyncButton();
+        }
+
+        function updateSyncButton() {
+            const pending = JSON.parse(localStorage.getItem(PENDING_KEY) || "[]");
+            const btn = document.getElementById("btnSync");
+            if (pending.length > 0) {
+                btn.classList.add("show");
+                btn.textContent = isOnline ? `🔄 Sync (${pending.length})` : `🟠 Pending (${pending.length})`;
+            } else {
+                btn.classList.remove("show");
+            }
         }
 
         // =============================================
-        // ADD SJ (satu per satu)
+        // ADD SJ
         // =============================================
         function addSJ() {
             const sj = document.getElementById("inputSJ").value.trim();
-            if (!sj) {
-                showToast("Masukkan No. Surat Jalan", true);
-                return;
-            }
-
-            // Cek duplikat
-            if (sjList.includes(sj)) {
-                showToast("No. Surat Jalan sudah ada di daftar", true);
-                document.getElementById("inputSJ").value = "";
-                document.getElementById("inputSJ").focus();
-                return;
-            }
-
+            if (!sj) { showToast("Masukkan No. Surat Jalan", true); return; }
+            if (sjList.includes(sj)) { showToast("No. Surat Jalan sudah ada", true); document.getElementById("inputSJ").value = ""; document.getElementById("inputSJ").focus(); return; }
             sjList.push(sj);
             document.getElementById("inputSJ").value = "";
             document.getElementById("inputSJ").focus();
@@ -305,78 +304,54 @@
             showToast(`✅ ${sj} ditambahkan`);
         }
 
-        // =============================================
-        // REMOVE SJ
-        // =============================================
         function removeSJ(index) {
             const removed = sjList.splice(index, 1)[0];
             renderSJList();
             showToast(`❌ ${removed} dihapus`);
-            document.getElementById("inputSJ").focus();
         }
 
-        // =============================================
-        // RENDER SJ LIST
-        // =============================================
         function renderSJList() {
             const container = document.getElementById("sjList");
             const section = document.getElementById("sjListSection");
             const btnStart = document.getElementById("btnStartTrip");
             const countEl = document.getElementById("sjCount");
-
-            if (sjList.length === 0) {
-                section.classList.remove("show");
-                return;
-            }
-
+            if (sjList.length === 0) { section.classList.remove("show"); return; }
             section.classList.add("show");
             countEl.textContent = sjList.length;
             btnStart.disabled = false;
-
-            let html = "";
-            sjList.forEach((sj, index) => {
-                html += `
-                    <div class="sj-list-item">
-                        <span>📋 ${sj}</span>
-                        <span class="remove-sj" onclick="event.stopPropagation();removeSJ(${index})">✕</span>
-                    </div>
-                `;
-            });
-            container.innerHTML = html;
+            container.innerHTML = sjList.map((sj, i) => `<div class="sj-list-item"><span>📋 ${sj}</span><span class="remove-sj" onclick="event.stopPropagation();removeSJ(${i})">✕</span></div>`).join("");
         }
 
         // =============================================
-        // START TRIP (check-in semua SJ sekaligus)
+        // START TRIP (check-in)
         // =============================================
         function startTrip() {
-            if (sjList.length === 0) {
-                showToast("Tambahkan minimal 1 Surat Jalan", true);
-                return;
-            }
-
-            const startTime = formatDateTime();
-            const startGPS = getGPSString();
-
+            if (sjList.length === 0) { showToast("Tambahkan minimal 1 Surat Jalan", true); return; }
+            tripStartTime = formatDateTime();
+            tripStartGPS = getGPSString();
             currentTrip = sjList.map(sj => ({
                 sj,
                 status: 'transit',
-                startTime,
-                startGPS,
+                checkinTime: tripStartTime,
+                checkinGPS: tripStartGPS,
                 endTime: null,
-                endGPS: null
+                endGPS: null,
+                synced: false,
+                checkinSent: false
             }));
-
             tripActive = true;
-
-            // Sembunyikan input & SJ list
             document.getElementById("inputSection").style.display = "none";
             document.getElementById("sjListSection").classList.remove("show");
             document.getElementById("tripSection").classList.add("show");
             document.getElementById("historySection").classList.add("show");
             stopScanner();
-
             renderTripList();
             showToast(`${sjList.length} surat jalan dimulai.`);
+
+            // Kirim data check-in ke server
+            currentTrip.forEach((trip, index) => {
+                kirimCheckinKeServer(trip, index);
+            });
         }
 
         // =============================================
@@ -385,173 +360,211 @@
         function renderTripList() {
             const container = document.getElementById("tripList");
             let html = "";
-
             currentTrip.forEach((trip, index) => {
-                const delivered = trip.status === 'delivered';
-                html += `
-                    <div class="trip-item ${delivered ? 'delivered' : ''}" onclick="${delivered ? '' : `checkOut(${index})`}">
-                        <div>
-                            <div class="sj-code">📋 ${trip.sj}</div>
-                            <div style="font-size:10px;color:#94A3B8;margin-top:2px;">Mulai: ${trip.startTime}</div>
-                            ${delivered ? `<div style="font-size:10px;color:#059669;margin-top:2px;">Tiba: ${trip.endTime}</div>` : ''}
-                        </div>
-                        <span class="sj-status ${delivered ? 'status-delivered' : 'status-transit'}">
-                            ${delivered ? '✅ Tiba' : '🚛 Transit'}
-                        </span>
+                const d = trip.status === 'delivered';
+                const pendingCheckin = !trip.checkinSent;
+                const pendingCheckout = d && !trip.synced;
+                html += `<div class="trip-item ${d ? 'delivered' : ''}" onclick="${d ? '' : `checkOut(${index})`}">
+                    <div>
+                        <div class="sj-code">📋 ${trip.sj}${pendingCheckin ? '<span class="pending-badge">🟠</span>' : ''}${pendingCheckout ? '<span class="pending-badge">🟠</span>' : ''}</div>
+                        <div style="font-size:10px;color:#94A3B8;margin-top:2px;">Mulai: ${trip.checkinTime}</div>
+                        ${d ? `<div style="font-size:10px;color:#059669;margin-top:2px;">Tiba: ${trip.endTime}</div>` : ''}
                     </div>
-                `;
+                    <span class="sj-status ${d ? (trip.synced ? 'status-delivered' : 'status-pending') : 'status-transit'}">
+                        ${d ? (trip.synced ? '✅ Tiba' : '🟠 Pending') : '🚛 Transit'}
+                    </span>
+                </div>`;
             });
-
             container.innerHTML = html;
+            updateSyncButton();
 
-            const allDelivered = currentTrip.every(t => t.status === 'delivered');
-            if (allDelivered) {
-                showToast("Semua surat jalan telah tiba. Trip selesai! 🎉");
+            const allDone = currentTrip.every(t => t.status === 'delivered' && t.synced);
+            if (allDone) {
+                showToast("Semua surat jalan telah tiba & tersinkron. Trip selesai! 🎉");
                 currentTrip.forEach(trip => {
                     saveHistory({
                         sj: trip.sj,
-                        startTime: trip.startTime,
-                        startGPS: trip.startGPS,
+                        checkinTime: trip.checkinTime,
+                        checkinGPS: trip.checkinGPS,
                         endTime: trip.endTime,
-                        endGPS: trip.endGPS
+                        endGPS: trip.endGPS,
+                        synced: trip.synced
                     });
                 });
             }
         }
 
         // =============================================
-        // CHECK-OUT SATU SJ
+        // KIRIM CHECK-IN KE SERVER
+        // =============================================
+        async function kirimCheckinKeServer(trip, index) {
+            if (!isOnline) {
+                addPending({ sj: trip.sj, waktuCheckin: trip.checkinTime, gpsCheckin: trip.checkinGPS, type: 'checkin' });
+                return;
+            }
+            try {
+                await fetch(API_URL, {
+                    method: "POST",
+                    mode: "no-cors",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify({
+                        sj: trip.sj,
+                        type: 'checkin',
+                        waktuCheckin: trip.checkinTime,
+                        gpsCheckin: trip.checkinGPS
+                    })
+                });
+                trip.checkinSent = true;
+                renderTripList();
+            } catch (error) {
+                addPending({ sj: trip.sj, waktuCheckin: trip.checkinTime, gpsCheckin: trip.checkinGPS, type: 'checkin' });
+            }
+        }
+
+        // =============================================
+        // CHECK-OUT
         // =============================================
         function checkOut(index) {
             const trip = currentTrip[index];
             if (!trip || trip.status === 'delivered') return;
-
-            if (!confirm(`Konfirmasi tiba di tujuan untuk:\n${trip.sj}\n\nKlik OK untuk check-out.`)) {
-                return;
-            }
-
+            if (!confirm(`Konfirmasi tiba di tujuan untuk:\n${trip.sj}\n\nKlik OK untuk check-out.`)) return;
             trip.status = 'delivered';
             trip.endTime = formatDateTime();
             trip.endGPS = getGPSString();
-
             renderTripList();
             showToast(`✅ ${trip.sj} telah tiba.`);
+            kirimCheckoutKeServer(trip, index);
         }
 
         // =============================================
-        // QR SCANNER (BarcodeDetector API)
+        // KIRIM CHECK-OUT KE SERVER
+        // =============================================
+        async function kirimCheckoutKeServer(trip, index) {
+            if (!isOnline) {
+                addPending({ sj: trip.sj, waktuTiba: trip.endTime, gpsTiba: trip.endGPS, type: 'checkout' });
+                renderTripList();
+                showToast("📶 Offline. Data disimpan lokal.");
+                return;
+            }
+            try {
+                await fetch(API_URL, {
+                    method: "POST",
+                    mode: "no-cors",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify({
+                        sj: trip.sj,
+                        type: 'checkout',
+                        waktuTiba: trip.endTime,
+                        gpsTiba: trip.endGPS
+                    })
+                });
+                trip.synced = true;
+                renderTripList();
+                showToast(`📡 ${trip.sj} terkirim ke server.`);
+            } catch (error) {
+                addPending({ sj: trip.sj, waktuTiba: trip.endTime, gpsTiba: trip.endGPS, type: 'checkout' });
+                renderTripList();
+                showToast("❌ Gagal kirim. Data disimpan lokal.", true);
+            }
+        }
+
+        // =============================================
+        // PENDING QUEUE
+        // =============================================
+        function addPending(item) {
+            const pending = JSON.parse(localStorage.getItem(PENDING_KEY) || "[]");
+            pending.push({ ...item, timestamp: formatDateTime() });
+            localStorage.setItem(PENDING_KEY, JSON.stringify(pending));
+            updateSyncButton();
+        }
+
+        async function syncPending() {
+            if (!isOnline) { showToast("📶 Masih offline.", true); return; }
+            const pending = JSON.parse(localStorage.getItem(PENDING_KEY) || "[]");
+            if (pending.length === 0) { showToast("Tidak ada data pending."); return; }
+            showToast(`Mengirim ${pending.length} data...`);
+            let success = 0;
+            for (const item of pending) {
+                try {
+                    await fetch(API_URL, {
+                        method: "POST",
+                        mode: "no-cors",
+                        headers: { "Content-Type": "application/json" },
+                        body: JSON.stringify(item)
+                    });
+                    success++;
+                } catch (e) { break; }
+            }
+            if (success > 0) {
+                const remaining = pending.slice(success);
+                localStorage.setItem(PENDING_KEY, JSON.stringify(remaining));
+                currentTrip.forEach(trip => {
+                    if (pending.some(p => p.sj === trip.sj && p.type === 'checkin')) trip.checkinSent = true;
+                    if (pending.some(p => p.sj === trip.sj && p.type === 'checkout')) trip.synced = true;
+                });
+                renderTripList();
+                showToast(`✅ ${success} data terkirim.${remaining.length > 0 ? ` ${remaining.length} gagal.` : ''}`);
+            } else {
+                showToast("❌ Gagal kirim.", true);
+            }
+            updateSyncButton();
+        }
+
+        // =============================================
+        // QR SCANNER
         // =============================================
         function toggleScanner() {
             const container = document.getElementById("qrContainer");
             const btn = document.getElementById("btnScan");
             const statusEl = document.getElementById("scanStatus");
-
-            if (scannerActive) {
-                stopScanner();
-                return;
-            }
-
-            if (!('BarcodeDetector' in window)) {
-                showToast("Browser tidak mendukung scan QR. Masukkan manual.", true);
-                return;
-            }
-
-            container.classList.add("show");
-            btn.classList.add("active");
-            btn.textContent = "✕";
-            scannerActive = true;
-            statusEl.textContent = "Arahkan kamera ke QR code...";
-            statusEl.className = "scan-status";
-
+            if (scannerActive) { stopScanner(); return; }
+            if (!('BarcodeDetector' in window)) { showToast("Browser tidak mendukung scan QR.", true); return; }
+            container.classList.add("show"); btn.classList.add("active"); btn.textContent = "✕"; scannerActive = true;
+            statusEl.textContent = "Arahkan kamera ke QR code..."; statusEl.className = "scan-status";
             const video = document.getElementById("qr-video");
-            const barcodeDetector = new BarcodeDetector({ formats: ['qr_code'] });
-
-            navigator.mediaDevices.getUserMedia({
-                video: { facingMode: "environment", width: { ideal: 640 }, height: { ideal: 480 } },
-                audio: false
-            })
-            .then(stream => {
-                video.srcObject = stream;
-                video.play();
-                scanLoop(barcodeDetector, video);
-            })
-            .catch(() => {
-                statusEl.textContent = "❌ Tidak bisa akses kamera. Masukkan manual.";
-                statusEl.className = "scan-status error";
-                stopScanner();
-            });
+            const detector = new BarcodeDetector({ formats: ['qr_code'] });
+            navigator.mediaDevices.getUserMedia({ video: { facingMode: "environment", width: { ideal: 640 }, height: { ideal: 480 } }, audio: false })
+                .then(stream => { video.srcObject = stream; video.play(); scanLoop(detector, video); })
+                .catch(() => { statusEl.textContent = "❌ Tidak bisa akses kamera."; statusEl.className = "scan-status error"; stopScanner(); });
         }
 
         function scanLoop(detector, video) {
             if (!scannerActive) return;
-            detector.detect(video)
-                .then(codes => {
-                    if (codes.length > 0) {
-                        document.getElementById("inputSJ").value = codes[0].rawValue;
-                        document.getElementById("scanStatus").textContent = `✅ Terbaca: ${codes[0].rawValue}`;
-                        document.getElementById("scanStatus").className = "scan-status success";
-                        showToast(`Terbaca: ${codes[0].rawValue}`);
-                        stopScanner();
-                        // Auto-add setelah scan
-                        setTimeout(() => addSJ(), 500);
-                    } else {
-                        scanLoopId = requestAnimationFrame(() => scanLoop(detector, video));
-                    }
-                })
-                .catch(() => {
-                    scanLoopId = requestAnimationFrame(() => scanLoop(detector, video));
-                });
+            detector.detect(video).then(codes => {
+                if (codes.length > 0) {
+                    document.getElementById("inputSJ").value = codes[0].rawValue;
+                    document.getElementById("scanStatus").textContent = `✅ Terbaca: ${codes[0].rawValue}`;
+                    document.getElementById("scanStatus").className = "scan-status success";
+                    showToast(`Terbaca: ${codes[0].rawValue}`);
+                    stopScanner();
+                    setTimeout(() => addSJ(), 500);
+                } else scanLoopId = requestAnimationFrame(() => scanLoop(detector, video));
+            }).catch(() => { scanLoopId = requestAnimationFrame(() => scanLoop(detector, video)); });
         }
 
         function stopScanner() {
             scannerActive = false;
-            if (scanLoopId) {
-                cancelAnimationFrame(scanLoopId);
-                scanLoopId = null;
-            }
+            if (scanLoopId) { cancelAnimationFrame(scanLoopId); scanLoopId = null; }
             const video = document.getElementById("qr-video");
-            if (video.srcObject) {
-                video.srcObject.getTracks().forEach(track => track.stop());
-                video.srcObject = null;
-            }
+            if (video.srcObject) { video.srcObject.getTracks().forEach(t => t.stop()); video.srcObject = null; }
             document.getElementById("qrContainer").classList.remove("show");
-            const btn = document.getElementById("btnScan");
-            btn.classList.remove("active");
-            btn.textContent = "📷";
+            const btn = document.getElementById("btnScan"); btn.classList.remove("active"); btn.textContent = "📷";
         }
 
         // =============================================
         // GPS
         // =============================================
         function requestGPS() {
-            const dot = document.getElementById("gpsDot");
-            const text = document.getElementById("gpsText");
-            if (!navigator.geolocation) {
-                text.textContent = "GPS tidak tersedia";
-                return;
-            }
+            const dot = document.getElementById("gpsDot"), text = document.getElementById("gpsText");
+            if (!navigator.geolocation) { text.textContent = "GPS tidak tersedia"; return; }
             text.textContent = "Mengambil lokasi...";
-            navigator.geolocation.getCurrentPosition(
-                pos => {
-                    gpsLat = pos.coords.latitude;
-                    gpsLng = pos.coords.longitude;
-                    gpsReady = true;
-                    dot.classList.add("active");
-                    text.textContent = `Lokasi siap (±${Math.round(pos.coords.accuracy)}m)`;
-                },
-                () => {
-                    gpsReady = false;
-                    dot.classList.remove("active");
-                    text.textContent = "GPS tidak dapat diakses. Tetap bisa lanjut.";
-                },
-                { enableHighAccuracy: true, timeout: 10000, maximumAge: 60000 }
-            );
+            navigator.geolocation.getCurrentPosition(pos => {
+                gpsLat = pos.coords.latitude; gpsLng = pos.coords.longitude; gpsReady = true;
+                dot.classList.add("active"); text.textContent = `Lokasi siap (±${Math.round(pos.coords.accuracy)}m)`;
+            }, () => { gpsReady = false; dot.classList.remove("active"); text.textContent = "GPS tidak dapat diakses."; }, { enableHighAccuracy: true, timeout: 10000, maximumAge: 60000 });
         }
 
-        function getGPSString() {
-            if (gpsReady && gpsLat !== null) return `${gpsLat.toFixed(6)}, ${gpsLng.toFixed(6)}`;
-            return "GPS tidak tersedia";
-        }
+        function getGPSString() { return gpsReady && gpsLat !== null ? `${gpsLat.toFixed(6)}, ${gpsLng.toFixed(6)}` : "GPS tidak tersedia"; }
 
         function formatDateTime() {
             const now = new Date();
@@ -562,10 +575,7 @@
         // RESET
         // =============================================
         function resetForm() {
-            stopScanner();
-            sjList = [];
-            currentTrip = [];
-            tripActive = false;
+            stopScanner(); sjList = []; currentTrip = []; tripActive = false; tripStartTime = null; tripStartGPS = null;
             document.getElementById("inputSJ").value = "";
             document.getElementById("inputSection").style.display = "block";
             document.getElementById("sjListSection").classList.remove("show");
@@ -574,7 +584,7 @@
             document.getElementById("scanStatus").textContent = "";
             document.getElementById("scanStatus").className = "scan-status";
             document.getElementById("inputSJ").focus();
-            requestGPS();
+            requestGPS(); updateSyncButton();
             showToast("Form di-reset.");
         }
 
@@ -605,8 +615,9 @@
             container.innerHTML = todayHistory.map(e => `
                 <div class="history-item">
                     <div class="sj">📋 ${e.sj}</div>
-                    <div class="times">▶ ${e.startTime} → 🏁 ${e.endTime}</div>
-                    <div class="gps">📍 Mulai: ${e.startGPS} | Tiba: ${e.endGPS}</div>
+                    <div class="times">▶ ${e.checkinTime || e.startTime} → 🏁 ${e.endTime}</div>
+                    <div class="gps">📍 Check-in: ${e.checkinGPS || e.startGPS} | Tiba: ${e.endGPS}</div>
+                    <div class="sync-status">${e.synced ? '✅ Tersinkron' : '🟠 Belum sinkron'}</div>
                 </div>
             `).join("");
         }
