@@ -4,6 +4,8 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
     <title>TrackORA Driver</title>
+    <!-- QR Scanner Library (lokal) -->
+    <script src="qr-scanner.min.js"></script>
     <style>
         * { margin: 0; padding: 0; box-sizing: border-box; }
 
@@ -51,13 +53,28 @@
             padding: 14px 16px; background: #7C3AED; color: white;
             border: none; border-radius: 8px; font-size: 18px; cursor: pointer;
             transition: background 0.2s; white-space: nowrap;
-            text-decoration: none; display: inline-flex; align-items: center; justify-content: center;
         }
         .btn-scan:hover { background: #6D28D9; }
-
-        .scan-hint {
-            font-size: 11px; color: #64748B; margin-top: 6px; text-align: center;
+        .btn-scan.active { background: #DC2626; animation: pulse-scan 1.5s infinite; }
+        @keyframes pulse-scan {
+            0%, 100% { box-shadow: 0 0 0 0 rgba(220,38,38,0.4); }
+            70% { box-shadow: 0 0 0 12px rgba(220,38,38,0); }
         }
+
+        /* QR Scanner Video */
+        .qr-video-container {
+            display: none; margin-bottom: 16px; border-radius: 8px; overflow: hidden;
+            border: 2px solid #334155;
+        }
+        .qr-video-container.show { display: block; }
+        #qr-video { width: 100%; display: block; }
+
+        .scan-status {
+            font-size: 11px; color: #64748B; margin-top: 6px; text-align: center;
+            min-height: 16px;
+        }
+        .scan-status.success { color: #059669; }
+        .scan-status.error { color: #DC2626; }
 
         .status-card {
             background: #0F172A; border: 1px solid #334155; border-radius: 12px;
@@ -139,23 +156,25 @@
             <p class="subtitle">Check-in & Check-out Pengiriman</p>
         </div>
 
-        <!-- INPUT + SCAN -->
         <div class="input-group">
             <label>No. Surat Jalan</label>
             <div class="input-row">
-                <input type="text" id="inputSJ" placeholder="Ketik atau paste hasil scan" autocomplete="off">
-                <a class="btn-scan" id="btnScan" href="#" onclick="openScanner(event)" title="Scan QR">📷</a>
+                <input type="text" id="inputSJ" placeholder="Ketik atau scan QR" autocomplete="off">
+                <button class="btn-scan" id="btnScan" onclick="toggleScanner()" title="Scan QR">📷</button>
             </div>
-            <div class="scan-hint">Scan pakai Google Lens → Copy hasil → Paste di sini</div>
+            <div class="scan-status" id="scanStatus"></div>
         </div>
 
-        <!-- GPS -->
+        <!-- QR VIDEO -->
+        <div class="qr-video-container" id="qrContainer">
+            <video id="qr-video" playsinline></video>
+        </div>
+
         <div class="gps-indicator" id="gpsIndicator">
             <div class="gps-dot" id="gpsDot"></div>
             <span id="gpsText">Menunggu GPS...</span>
         </div>
 
-        <!-- STATUS -->
         <div class="status-card" id="statusCard">
             <div class="status-icon" id="statusIcon">🚛</div>
             <div class="status-label" id="statusLabel">DALAM PERJALANAN</div>
@@ -163,14 +182,12 @@
             <div class="status-sj" id="statusSJ"></div>
         </div>
 
-        <!-- BUTTONS -->
         <div class="btn-row">
             <button class="btn btn-start" id="btnStart" onclick="mulaiPerjalanan()">▶ Mulai Perjalanan</button>
             <button class="btn btn-finish" id="btnFinish" onclick="tibaDiTujuan()" disabled>🏁 Tiba di Tujuan</button>
             <button class="btn btn-reset" onclick="resetForm()" title="Reset">↺</button>
         </div>
 
-        <!-- HISTORY -->
         <div class="history-section">
             <h3>📋 Riwayat Hari Ini</h3>
             <div id="historyList">
@@ -182,11 +199,19 @@
     <div class="toast" id="toast"></div>
 
     <script>
+        // =============================================
+        // STATE
+        // =============================================
         const STORAGE_KEY = "trackora_driver_history";
         let currentSJ = null, currentStatus = null;
         let startTime = null, startGPS = null, endTime = null, endGPS = null;
         let gpsReady = false, gpsLat = null, gpsLng = null;
+        let qrScanner = null;
+        let scannerActive = false;
 
+        // =============================================
+        // INIT
+        // =============================================
         function init() {
             loadHistory();
             requestGPS();
@@ -197,28 +222,68 @@
         }
 
         // =============================================
-        // BUKA GOOGLE LENS / QR SCANNER
+        // QR SCANNER (qr-scanner library)
         // =============================================
-        function openScanner(event) {
-            event.preventDefault();
-            
-            // Coba Google Lens dulu
-            const lensUrl = "google-lens://";
-            const lensIntent = "intent://scan/#Intent;scheme=google-lens;package=com.google.ar.lens;end";
-            
-            // Fallback: coba buka aplikasi scanner umum
-            const zxingIntent = "intent://scan/#Intent;scheme=zxing;package=com.google.zxing.client.android;S.browser_fallback_url=https://play.google.com/store/apps/details?id=com.google.zxing.client.android;end";
-            
-            // Coba Google Lens
-            window.location.href = lensIntent;
-            
-            // Kalau Google Lens tidak terinstall, timeout 1 detik lalu fallback
-            setTimeout(() => {
-                // Cek apakah masih di halaman ini (Google Lens gagal)
-                window.location.href = zxingIntent;
-            }, 1000);
+        function toggleScanner() {
+            const container = document.getElementById("qrContainer");
+            const btn = document.getElementById("btnScan");
+            const statusEl = document.getElementById("scanStatus");
 
-            showToast("Scan QR, copy hasil, paste di input");
+            if (scannerActive) {
+                stopScanner();
+                return;
+            }
+
+            // Cek apakah QrScanner tersedia
+            if (typeof QrScanner === "undefined") {
+                showToast("Library QR tidak terload. Masukkan manual.", true);
+                return;
+            }
+
+            container.classList.add("show");
+            btn.classList.add("active");
+            btn.textContent = "✕";
+            scannerActive = true;
+            statusEl.textContent = "Arahkan kamera ke QR code...";
+            statusEl.className = "scan-status";
+
+            const video = document.getElementById("qr-video");
+
+            qrScanner = new QrScanner(
+                video,
+                result => {
+                    document.getElementById("inputSJ").value = result.data;
+                    statusEl.textContent = "✅ QR berhasil dipindai";
+                    statusEl.className = "scan-status success";
+                    showToast(`Terbaca: ${result.data}`);
+                    stopScanner();
+                },
+                {
+                    highlightScanRegion: true,
+                    highlightCodeOutline: true,
+                    returnDetailedScanResult: false,
+                    maxScansPerSecond: 5
+                }
+            );
+
+            qrScanner.start().catch(err => {
+                statusEl.textContent = "❌ Tidak bisa akses kamera. Masukkan manual.";
+                statusEl.className = "scan-status error";
+                stopScanner();
+            });
+        }
+
+        function stopScanner() {
+            if (qrScanner) {
+                qrScanner.stop();
+                qrScanner.destroy();
+                qrScanner = null;
+            }
+            document.getElementById("qrContainer").classList.remove("show");
+            const btn = document.getElementById("btnScan");
+            btn.classList.remove("active");
+            btn.textContent = "📷";
+            scannerActive = false;
         }
 
         // =============================================
@@ -272,6 +337,7 @@
             document.getElementById("btnStart").disabled = true;
             document.getElementById("btnFinish").disabled = false;
             document.getElementById("inputSJ").disabled = true;
+            stopScanner();
             showToast("Perjalanan dimulai.");
         }
 
@@ -288,6 +354,7 @@
         }
 
         function resetForm() {
+            stopScanner();
             currentSJ = null; currentStatus = null;
             startTime = null; startGPS = null; endTime = null; endGPS = null;
             const input = document.getElementById("inputSJ");
@@ -295,6 +362,8 @@
             document.getElementById("statusCard").classList.remove("show");
             document.getElementById("btnStart").disabled = false;
             document.getElementById("btnFinish").disabled = true;
+            document.getElementById("scanStatus").textContent = "";
+            document.getElementById("scanStatus").className = "scan-status";
             requestGPS();
         }
 
