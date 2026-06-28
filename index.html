@@ -4,6 +4,8 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
     <title>TrackORA Driver</title>
+    <!-- QR Code Scanner Library -->
+    <script src="https://unpkg.com/html5-qrcode@2.3.8/html5-qrcode.min.js"></script>
     <style>
         * { margin: 0; padding: 0; box-sizing: border-box; }
 
@@ -27,200 +29,107 @@
             box-shadow: 0 25px 50px rgba(0,0,0,0.4);
         }
 
-        /* === HEADER === */
         .app-header {
             text-align: center;
             margin-bottom: 28px;
         }
-        .app-logo {
-            font-size: 40px;
-            margin-bottom: 8px;
-        }
+        .app-logo { font-size: 40px; margin-bottom: 8px; }
         .app-header h1 {
-            font-size: 22px;
-            font-weight: 700;
-            color: #F8FAFC;
-            letter-spacing: -0.5px;
+            font-size: 22px; font-weight: 700; color: #F8FAFC; letter-spacing: -0.5px;
         }
-        .app-header .subtitle {
-            font-size: 12px;
-            color: #64748B;
-            margin-top: 2px;
-        }
+        .app-header .subtitle { font-size: 12px; color: #64748B; margin-top: 2px; }
 
-        /* === INPUT SURAT JALAN === */
-        .input-group {
-            margin-bottom: 20px;
-        }
+        .input-group { margin-bottom: 12px; }
         .input-group label {
-            display: block;
-            font-size: 12px;
-            font-weight: 600;
-            color: #94A3B8;
-            margin-bottom: 6px;
-            text-transform: uppercase;
-            letter-spacing: 0.5px;
+            display: block; font-size: 12px; font-weight: 600; color: #94A3B8;
+            margin-bottom: 6px; text-transform: uppercase; letter-spacing: 0.5px;
         }
+        .input-row { display: flex; gap: 8px; }
         .input-group input {
-            width: 100%;
-            padding: 14px 16px;
-            background: #0F172A;
-            border: 1px solid #334155;
-            border-radius: 8px;
-            color: #F8FAFC;
-            font-size: 16px;
-            font-family: 'SF Mono', 'Courier New', monospace;
-            outline: none;
-            transition: border-color 0.2s;
+            flex: 1; padding: 14px 16px; background: #0F172A;
+            border: 1px solid #334155; border-radius: 8px; color: #F8FAFC;
+            font-size: 16px; font-family: 'SF Mono', 'Courier New', monospace;
+            outline: none; transition: border-color 0.2s;
         }
-        .input-group input:focus {
-            border-color: #2563EB;
-            box-shadow: 0 0 0 3px rgba(37,99,235,0.15);
+        .input-group input:focus { border-color: #2563EB; box-shadow: 0 0 0 3px rgba(37,99,235,0.15); }
+        .input-group input::placeholder { color: #475569; }
+
+        .btn-scan {
+            padding: 14px 16px; background: #7C3AED; color: white;
+            border: none; border-radius: 8px; font-size: 18px; cursor: pointer;
+            transition: background 0.2s; white-space: nowrap;
         }
-        .input-group input::placeholder {
-            color: #475569;
+        .btn-scan:hover { background: #6D28D9; }
+        .btn-scan.active { background: #DC2626; animation: pulse-scan 1.5s infinite; }
+        @keyframes pulse-scan {
+            0%, 100% { box-shadow: 0 0 0 0 rgba(220,38,38,0.4); }
+            70% { box-shadow: 0 0 0 12px rgba(220,38,38,0); }
         }
 
-        /* === STATUS CARD === */
+        /* QR Reader Container */
+        .qr-reader-container {
+            display: none; margin-bottom: 16px; border-radius: 8px; overflow: hidden;
+            border: 2px solid #334155;
+        }
+        .qr-reader-container.show { display: block; }
+        #qr-reader { width: 100%; }
+
         .status-card {
-            background: #0F172A;
-            border: 1px solid #334155;
-            border-radius: 12px;
-            padding: 20px;
-            text-align: center;
-            margin-bottom: 20px;
-            display: none;
+            background: #0F172A; border: 1px solid #334155; border-radius: 12px;
+            padding: 20px; text-align: center; margin-bottom: 20px; display: none;
         }
         .status-card.show { display: block; }
-        .status-card .status-icon {
-            font-size: 48px;
-            margin-bottom: 8px;
-        }
+        .status-card .status-icon { font-size: 48px; margin-bottom: 8px; }
         .status-card .status-label {
-            font-size: 14px;
-            font-weight: 600;
-            color: #94A3B8;
-            text-transform: uppercase;
-            letter-spacing: 1px;
+            font-size: 14px; font-weight: 600; color: #94A3B8;
+            text-transform: uppercase; letter-spacing: 1px;
         }
-        .status-card .status-time {
-            font-size: 13px;
-            color: #64748B;
-            margin-top: 4px;
-        }
+        .status-card .status-time { font-size: 13px; color: #64748B; margin-top: 4px; }
         .status-card .status-sj {
-            font-size: 14px;
-            color: #2563EB;
-            font-weight: 600;
-            margin-top: 8px;
+            font-size: 14px; color: #2563EB; font-weight: 600; margin-top: 8px;
             font-family: 'SF Mono', 'Courier New', monospace;
         }
 
-        /* === BUTTONS === */
-        .btn-row {
-            display: flex;
-            gap: 10px;
-            flex-wrap: wrap;
-        }
+        .btn-row { display: flex; gap: 10px; flex-wrap: wrap; }
         .btn {
-            flex: 1;
-            min-width: 120px;
-            padding: 14px 20px;
-            border: none;
-            border-radius: 8px;
-            font-size: 14px;
-            font-weight: 600;
-            cursor: pointer;
-            transition: all 0.2s;
-            text-align: center;
+            flex: 1; min-width: 100px; padding: 14px 20px; border: none;
+            border-radius: 8px; font-size: 14px; font-weight: 600; cursor: pointer;
+            transition: all 0.2s; text-align: center;
         }
-        .btn-start {
-            background: #059669;
-            color: white;
-        }
+        .btn-start { background: #059669; color: white; }
         .btn-start:hover { background: #047857; }
-        .btn-start:disabled {
-            background: #334155;
-            color: #64748B;
-            cursor: not-allowed;
-        }
-        .btn-finish {
-            background: #2563EB;
-            color: white;
-        }
+        .btn-start:disabled { background: #334155; color: #64748B; cursor: not-allowed; }
+        .btn-finish { background: #2563EB; color: white; }
         .btn-finish:hover { background: #1D4ED8; }
-        .btn-finish:disabled {
-            background: #334155;
-            color: #64748B;
-            cursor: not-allowed;
-        }
+        .btn-finish:disabled { background: #334155; color: #64748B; cursor: not-allowed; }
         .btn-reset {
-            background: #334155;
-            color: #94A3B8;
-            flex: 0;
-            min-width: auto;
-            padding: 14px 16px;
+            background: #334155; color: #94A3B8; flex: 0; min-width: auto; padding: 14px 16px;
         }
         .btn-reset:hover { background: #475569; color: #CBD5E1; }
 
-        /* === RIWAYAT === */
         .history-section {
-            margin-top: 28px;
-            border-top: 1px solid #334155;
-            padding-top: 20px;
+            margin-top: 28px; border-top: 1px solid #334155; padding-top: 20px;
         }
         .history-section h3 {
-            font-size: 13px;
-            font-weight: 600;
-            color: #64748B;
-            text-transform: uppercase;
-            letter-spacing: 0.5px;
-            margin-bottom: 12px;
+            font-size: 13px; font-weight: 600; color: #64748B;
+            text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 12px;
         }
         .history-item {
-            background: #0F172A;
-            border: 1px solid #334155;
-            border-radius: 8px;
-            padding: 12px 14px;
-            margin-bottom: 8px;
-            font-size: 13px;
+            background: #0F172A; border: 1px solid #334155; border-radius: 8px;
+            padding: 12px 14px; margin-bottom: 8px; font-size: 13px;
         }
         .history-item .sj {
-            font-family: 'SF Mono', 'Courier New', monospace;
-            font-weight: 600;
-            color: #2563EB;
+            font-family: 'SF Mono', 'Courier New', monospace; font-weight: 600; color: #2563EB;
         }
-        .history-item .times {
-            color: #94A3B8;
-            margin-top: 4px;
-            font-size: 11px;
-        }
-        .history-item .gps {
-            color: #64748B;
-            font-size: 10px;
-        }
-        .history-empty {
-            text-align: center;
-            color: #475569;
-            font-size: 13px;
-            padding: 20px;
-        }
+        .history-item .times { color: #94A3B8; margin-top: 4px; font-size: 11px; }
+        .history-item .gps { color: #64748B; font-size: 10px; }
+        .history-empty { text-align: center; color: #475569; font-size: 13px; padding: 20px; }
 
-        /* === TOAST === */
         .toast {
-            position: fixed;
-            bottom: 24px;
-            left: 50%;
-            transform: translateX(-50%);
-            background: #059669;
-            color: white;
-            padding: 12px 24px;
-            border-radius: 8px;
-            font-size: 13px;
-            font-weight: 600;
-            z-index: 999;
-            animation: toastIn 0.3s ease-out;
-            display: none;
+            position: fixed; bottom: 24px; left: 50%; transform: translateX(-50%);
+            background: #059669; color: white; padding: 12px 24px; border-radius: 8px;
+            font-size: 13px; font-weight: 600; z-index: 999;
+            animation: toastIn 0.3s ease-out; display: none;
         }
         .toast.show { display: block; }
         .toast.error { background: #DC2626; }
@@ -229,22 +138,11 @@
             to { opacity: 1; transform: translateX(-50%) translateY(0); }
         }
 
-        /* === GPS INDICATOR === */
         .gps-indicator {
-            display: flex;
-            align-items: center;
-            gap: 6px;
-            font-size: 11px;
-            color: #64748B;
-            margin-top: 8px;
-            justify-content: center;
+            display: flex; align-items: center; gap: 6px; font-size: 11px;
+            color: #64748B; margin-top: 8px; justify-content: center;
         }
-        .gps-dot {
-            width: 8px;
-            height: 8px;
-            border-radius: 50%;
-            background: #DC2626;
-        }
+        .gps-dot { width: 8px; height: 8px; border-radius: 50%; background: #DC2626; }
         .gps-dot.active { background: #059669; animation: pulse-dot 1.5s infinite; }
         @keyframes pulse-dot {
             0%, 100% { opacity: 1; }
@@ -255,26 +153,33 @@
 <body>
 
     <div class="app-container">
-        <!-- HEADER -->
         <div class="app-header">
             <div class="app-logo">🚛</div>
             <h1>TrackORA Driver</h1>
             <p class="subtitle">Check-in & Check-out Pengiriman</p>
         </div>
 
-        <!-- INPUT SURAT JALAN -->
+        <!-- INPUT SURAT JALAN + SCAN -->
         <div class="input-group">
             <label>No. Surat Jalan</label>
-            <input type="text" id="inputSJ" placeholder="Masukkan No. Surat Jalan" autocomplete="off">
+            <div class="input-row">
+                <input type="text" id="inputSJ" placeholder="Ketik atau scan" autocomplete="off">
+                <button class="btn-scan" id="btnScan" onclick="toggleScanner()" title="Scan QR Code">📷</button>
+            </div>
         </div>
 
-        <!-- GPS STATUS -->
+        <!-- QR SCANNER -->
+        <div class="qr-reader-container" id="qrContainer">
+            <div id="qr-reader"></div>
+        </div>
+
+        <!-- GPS -->
         <div class="gps-indicator" id="gpsIndicator">
             <div class="gps-dot" id="gpsDot"></div>
             <span id="gpsText">Menunggu GPS...</span>
         </div>
 
-        <!-- STATUS CARD -->
+        <!-- STATUS -->
         <div class="status-card" id="statusCard">
             <div class="status-icon" id="statusIcon">🚛</div>
             <div class="status-label" id="statusLabel">DALAM PERJALANAN</div>
@@ -284,16 +189,12 @@
 
         <!-- BUTTONS -->
         <div class="btn-row">
-            <button class="btn btn-start" id="btnStart" onclick="mulaiPerjalanan()">
-                ▶ Mulai Perjalanan
-            </button>
-            <button class="btn btn-finish" id="btnFinish" onclick="tibaDiTujuan()" disabled>
-                🏁 Tiba di Tujuan
-            </button>
+            <button class="btn btn-start" id="btnStart" onclick="mulaiPerjalanan()">▶ Mulai Perjalanan</button>
+            <button class="btn btn-finish" id="btnFinish" onclick="tibaDiTujuan()" disabled>🏁 Tiba di Tujuan</button>
             <button class="btn btn-reset" onclick="resetForm()" title="Reset">↺</button>
         </div>
 
-        <!-- RIWAYAT -->
+        <!-- HISTORY -->
         <div class="history-section">
             <h3>📋 Riwayat Hari Ini</h3>
             <div id="historyList">
@@ -302,7 +203,6 @@
         </div>
     </div>
 
-    <!-- TOAST -->
     <div class="toast" id="toast"></div>
 
     <script>
@@ -311,7 +211,7 @@
         // =============================================
         const STORAGE_KEY = "trackora_driver_history";
         let currentSJ = null;
-        let currentStatus = null; // null | 'transit' | 'delivered'
+        let currentStatus = null;
         let startTime = null;
         let startGPS = null;
         let endTime = null;
@@ -319,6 +219,8 @@
         let gpsReady = false;
         let gpsLat = null;
         let gpsLng = null;
+        let html5QrCode = null;
+        let scannerActive = false;
 
         // =============================================
         // INIT
@@ -329,6 +231,63 @@
             document.getElementById("inputSJ").addEventListener("keypress", e => {
                 if (e.key === "Enter") mulaiPerjalanan();
             });
+            document.getElementById("inputSJ").focus();
+        }
+
+        // =============================================
+        // QR SCANNER
+        // =============================================
+        function toggleScanner() {
+            const container = document.getElementById("qrContainer");
+            const btn = document.getElementById("btnScan");
+
+            if (scannerActive) {
+                stopScanner();
+                return;
+            }
+
+            container.classList.add("show");
+            btn.classList.add("active");
+            btn.textContent = "✕";
+            scannerActive = true;
+
+            html5QrCode = new Html5Qrcode("qr-reader");
+
+            html5QrCode.start(
+                { facingMode: "environment" }, // kamera belakang
+                {
+                    fps: 10,
+                    qrbox: { width: 250, height: 250 },
+                    aspectRatio: 1
+                },
+                onScanSuccess,
+                onScanError
+            ).catch(err => {
+                showToast("Tidak bisa mengakses kamera", true);
+                stopScanner();
+            });
+        }
+
+        function onScanSuccess(decodedText) {
+            document.getElementById("inputSJ").value = decodedText;
+            showToast(`Terbaca: ${decodedText}`);
+            stopScanner();
+        }
+
+        function onScanError(err) {
+            // Error scanning biasa, tidak perlu ditampilkan
+        }
+
+        function stopScanner() {
+            if (html5QrCode) {
+                html5QrCode.stop().catch(() => {});
+                html5QrCode = null;
+            }
+            document.getElementById("qrContainer").classList.remove("show");
+            const btn = document.getElementById("btnScan");
+            btn.classList.remove("active");
+            btn.textContent = "📷";
+            scannerActive = false;
         }
 
         // =============================================
@@ -337,43 +296,26 @@
         function requestGPS() {
             const dot = document.getElementById("gpsDot");
             const text = document.getElementById("gpsText");
-
             if (!navigator.geolocation) {
-                text.textContent = "GPS tidak tersedia di perangkat ini";
+                text.textContent = "GPS tidak tersedia";
                 return;
             }
-
             text.textContent = "Mengambil lokasi...";
-
             navigator.geolocation.getCurrentPosition(
                 pos => {
                     gpsLat = pos.coords.latitude;
                     gpsLng = pos.coords.longitude;
                     gpsReady = true;
                     dot.classList.add("active");
-                    text.textContent = `Lokasi siap (akurasi ±${Math.round(pos.coords.accuracy)}m)`;
+                    text.textContent = `Lokasi siap (±${Math.round(pos.coords.accuracy)}m)`;
                 },
-                err => {
+                () => {
                     gpsReady = false;
                     dot.classList.remove("active");
                     text.textContent = "GPS tidak dapat diakses. Tetap bisa lanjut.";
                 },
                 { enableHighAccuracy: true, timeout: 10000, maximumAge: 60000 }
             );
-
-            // Update GPS setiap 30 detik
-            setInterval(() => {
-                navigator.geolocation.getCurrentPosition(
-                    pos => {
-                        gpsLat = pos.coords.latitude;
-                        gpsLng = pos.coords.longitude;
-                        gpsReady = true;
-                        dot.classList.add("active");
-                    },
-                    () => {},
-                    { enableHighAccuracy: true, timeout: 5000, maximumAge: 30000 }
-                );
-            }, 30000);
         }
 
         function getGPSString() {
@@ -384,17 +326,11 @@
         }
 
         // =============================================
-        // FORMAT TANGGAL
+        // FORMAT
         // =============================================
         function formatDateTime() {
             const now = new Date();
-            const d = String(now.getDate()).padStart(2, '0');
-            const m = String(now.getMonth() + 1).padStart(2, '0');
-            const y = now.getFullYear();
-            const h = String(now.getHours()).padStart(2, '0');
-            const min = String(now.getMinutes()).padStart(2, '0');
-            const s = String(now.getSeconds()).padStart(2, '0');
-            return `${d}/${m}/${y} ${h}:${min}:${s}`;
+            return `${String(now.getDate()).padStart(2,'0')}/${String(now.getMonth()+1).padStart(2,'0')}/${now.getFullYear()} ${String(now.getHours()).padStart(2,'0')}:${String(now.getMinutes()).padStart(2,'0')}:${String(now.getSeconds()).padStart(2,'0')}`;
         }
 
         // =============================================
@@ -403,27 +339,24 @@
         function mulaiPerjalanan() {
             const sj = document.getElementById("inputSJ").value.trim();
             if (!sj) {
-                showToast("Masukkan No. Surat Jalan terlebih dahulu", true);
+                showToast("Masukkan No. Surat Jalan", true);
                 return;
             }
-
             currentSJ = sj;
             currentStatus = "transit";
             startTime = formatDateTime();
             startGPS = getGPSString();
 
-            // Update UI
             document.getElementById("statusCard").classList.add("show");
             document.getElementById("statusIcon").textContent = "🚛";
             document.getElementById("statusLabel").textContent = "DALAM PERJALANAN";
             document.getElementById("statusTime").textContent = `Mulai: ${startTime}`;
             document.getElementById("statusSJ").textContent = `SJ: ${currentSJ}`;
-
             document.getElementById("btnStart").disabled = true;
             document.getElementById("btnFinish").disabled = false;
             document.getElementById("inputSJ").disabled = true;
-
-            showToast("Perjalanan dimulai. Hati-hati di jalan.");
+            stopScanner();
+            showToast("Perjalanan dimulai.");
         }
 
         // =============================================
@@ -431,74 +364,54 @@
         // =============================================
         function tibaDiTujuan() {
             if (!currentSJ || currentStatus !== "transit") return;
-
             currentStatus = "delivered";
             endTime = formatDateTime();
             endGPS = getGPSString();
 
-            // Update UI
             document.getElementById("statusIcon").textContent = "✅";
             document.getElementById("statusLabel").textContent = "TERKIRIM";
             document.getElementById("statusTime").textContent = `Mulai: ${startTime} | Tiba: ${endTime}`;
-            document.getElementById("statusSJ").textContent = `SJ: ${currentSJ}`;
-
             document.getElementById("btnFinish").disabled = true;
 
-            // Simpan ke history
             saveHistory({
                 sj: currentSJ,
-                startTime: startTime,
-                startGPS: startGPS,
-                endTime: endTime,
-                endGPS: endGPS
+                startTime, startGPS,
+                endTime, endGPS
             });
-
-            showToast("Pengiriman selesai. Data tersimpan.");
+            showToast("Pengiriman selesai.");
         }
 
         // =============================================
-        // RESET FORM
+        // RESET
         // =============================================
         function resetForm() {
-            currentSJ = null;
-            currentStatus = null;
-            startTime = null;
-            startGPS = null;
-            endTime = null;
-            endGPS = null;
+            stopScanner();
+            currentSJ = null; currentStatus = null;
+            startTime = null; startGPS = null;
+            endTime = null; endGPS = null;
 
-            document.getElementById("inputSJ").value = "";
-            document.getElementById("inputSJ").disabled = false;
-            document.getElementById("inputSJ").focus();
+            const input = document.getElementById("inputSJ");
+            input.value = "";
+            input.disabled = false;
+            input.focus();
 
             document.getElementById("statusCard").classList.remove("show");
             document.getElementById("btnStart").disabled = false;
             document.getElementById("btnFinish").disabled = true;
-
-            // Refresh GPS
             requestGPS();
         }
 
         // =============================================
-        // HISTORY (localStorage)
+        // HISTORY
         // =============================================
         function saveHistory(entry) {
             const today = new Date().toDateString();
             let history = JSON.parse(localStorage.getItem(STORAGE_KEY) || "{}");
-
             if (!history[today]) history[today] = [];
             history[today].unshift(entry);
-
-            // Simpan maksimal 50 entry per hari
             if (history[today].length > 50) history[today] = history[today].slice(0, 50);
-
-            // Hapus data lebih dari 7 hari
             const keys = Object.keys(history);
-            if (keys.length > 7) {
-                const oldest = keys.sort()[0];
-                delete history[oldest];
-            }
-
+            if (keys.length > 7) delete history[keys.sort()[0]];
             localStorage.setItem(STORAGE_KEY, JSON.stringify(history));
             loadHistory();
         }
@@ -507,25 +420,18 @@
             const today = new Date().toDateString();
             const history = JSON.parse(localStorage.getItem(STORAGE_KEY) || "{}");
             const todayHistory = history[today] || [];
-
             const container = document.getElementById("historyList");
-
             if (todayHistory.length === 0) {
                 container.innerHTML = '<div class="history-empty">Belum ada pengiriman hari ini</div>';
                 return;
             }
-
-            let html = "";
-            for (let entry of todayHistory) {
-                html += `
-                    <div class="history-item">
-                        <div class="sj">📋 ${entry.sj}</div>
-                        <div class="times">▶ ${entry.startTime} → 🏁 ${entry.endTime}</div>
-                        <div class="gps">📍 Mulai: ${entry.startGPS} | Tiba: ${entry.endGPS}</div>
-                    </div>
-                `;
-            }
-            container.innerHTML = html;
+            container.innerHTML = todayHistory.map(e => `
+                <div class="history-item">
+                    <div class="sj">📋 ${e.sj}</div>
+                    <div class="times">▶ ${e.startTime} → 🏁 ${e.endTime}</div>
+                    <div class="gps">📍 Mulai: ${e.startGPS} | Tiba: ${e.endGPS}</div>
+                </div>
+            `).join("");
         }
 
         // =============================================
@@ -534,17 +440,12 @@
         function showToast(message, isError = false) {
             const toast = document.getElementById("toast");
             toast.textContent = message;
-            toast.classList.remove("error");
-            if (isError) toast.classList.add("error");
+            toast.classList.toggle("error", isError);
             toast.classList.add("show");
             setTimeout(() => toast.classList.remove("show"), 2500);
         }
 
-        // =============================================
-        // START
-        // =============================================
         init();
-        document.getElementById("inputSJ").focus();
     </script>
 </body>
 </html>
