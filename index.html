@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
-    <title>TrackORA Driver v3.4</title>
+    <title>TrackORA Driver v3.7</title>
     <style>
         * { margin: 0; padding: 0; box-sizing: border-box; }
 
@@ -136,9 +136,37 @@
         }
         .btn-sync.show { display: block; }
 
-        .pending-badge {
-            font-size: 10px; color: #D97706; margin-left: 6px;
+        .pending-badge { font-size: 10px; color: #D97706; margin-left: 6px; }
+
+        /* Modal check-out */
+        .modal-overlay {
+            display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%;
+            background: rgba(15,23,42,0.8); backdrop-filter: blur(2px);
+            z-index: 2000; justify-content: center; align-items: center;
         }
+        .modal-overlay.show { display: flex; }
+        .modal-box {
+            background: #1E293B; border-radius: 12px; padding: 24px;
+            width: 90%; max-width: 340px; text-align: center;
+            box-shadow: 0 20px 60px rgba(0,0,0,0.5);
+        }
+        .modal-box h3 { font-size: 16px; color: #F8FAFC; margin-bottom: 4px; }
+        .modal-box p { font-size: 13px; color: #94A3B8; margin-bottom: 20px; }
+        .modal-btn {
+            width: 100%; padding: 14px; border: none; border-radius: 8px;
+            font-size: 14px; font-weight: 600; cursor: pointer; margin-bottom: 8px;
+            transition: all 0.2s;
+        }
+        .modal-btn-primary { background: #2563EB; color: white; }
+        .modal-btn-primary:hover { background: #1D4ED8; }
+        .modal-btn-danger { background: transparent; color: #DC2626; }
+        .modal-btn-danger:hover { background: #3B1414; }
+
+        .validation-status {
+            font-size: 12px; color: #94A3B8; margin-top: 8px; min-height: 18px;
+        }
+        .validation-status.success { color: #059669; }
+        .validation-status.error { color: #DC2626; }
 
         .history-section {
             margin-top: 28px; border-top: 1px solid #334155; padding-top: 20px; display: none;
@@ -185,7 +213,7 @@
 <body>
 
     <div class="app-container">
-        <div class="version-badge">v3.4</div>
+        <div class="version-badge">v3.7</div>
         <div class="online-indicator">
             <div class="online-dot" id="onlineDot"></div>
             <span id="onlineText">Cek koneksi...</span>
@@ -223,11 +251,26 @@
         </div>
 
         <div class="trip-section" id="tripSection">
-            <p style="font-size:12px;color:#94A3B8;margin-bottom:12px;text-align:center;">🟣 Klik SJ untuk check-out | ✅ Tiba | 🟠 Pending sync</p>
+            <p style="font-size:12px;color:#94A3B8;margin-bottom:12px;text-align:center;">🟣 Klik SJ untuk check-out | ✅ Tiba | 🔒 QR Validated | 🟠 Pending sync</p>
             <div id="tripList"></div>
             <div class="btn-row">
                 <button class="btn btn-sync" id="btnSync" onclick="syncPending()">🔄 Sync</button>
                 <button class="btn btn-reset" onclick="resetForm()" title="Reset">↺ Trip Baru</button>
+            </div>
+        </div>
+
+        <!-- MODAL CHECK-OUT (hanya scan QR) -->
+        <div class="modal-overlay" id="checkoutModal">
+            <div class="modal-box">
+                <h3>📋 <span id="modalSJName"></span></h3>
+                <p>Scan QR code di cabang tujuan untuk validasi check-out.</p>
+                <button class="modal-btn modal-btn-primary" onclick="scanQRUntukCheckout()">
+                    📷 Scan QR Validasi
+                </button>
+                <button class="modal-btn modal-btn-danger" onclick="closeCheckoutModal()">
+                    Batal
+                </button>
+                <div class="validation-status" id="validationStatus"></div>
             </div>
         </div>
 
@@ -248,12 +291,48 @@
         const PENDING_KEY = "trackora_driver_pending";
         const ACTIVE_TRIP_KEY = "trackora_driver_active_trip";
 
+        // Database validasi tujuan & QR code
+        const VALIDATION_DB = [
+            { tujuan: "AUTO NUSA ABADI", qrCode: "AUTO-NUSA-ABADI" },
+            { tujuan: "CV. ANA WAINGAPU", qrCode: "AUTO-NUSA-ABADI" },
+            { tujuan: "AUTO2000 A. YANI", qrCode: "AUTO2000-A.-YANI" },
+            { tujuan: "AUTO2000 HR MOHAMMAD", qrCode: "AUTO2000-HR-MOHAMMAD" },
+            { tujuan: "AUTO2000 JEMUR SARI", qrCode: "AUTO2000-JEMUR-SARI" },
+            { tujuan: "AUTO2000 KENJERAN", qrCode: "AUTO2000-KENJERAN" },
+            { tujuan: "BP AUTO2000 KENJERAN", qrCode: "AUTO2000-KENJERAN" },
+            { tujuan: "AUTO2000 KERTAJAYA", qrCode: "AUTO2000-KERTAJAYA" },
+            { tujuan: "AUTO2000 WIYUNG", qrCode: "AUTO2000-WIYUNG" },
+            { tujuan: "GUDANG KETINTANG", qrCode: "GUDANG-KETINTANG" },
+            { tujuan: "SINAR SURI MANOKWARI", qrCode: "SINAR-SURI-MANOKWARI" },
+            { tujuan: "AUTO2000 WARU", qrCode: "AUTO2000-WARU" },
+            { tujuan: "ARINA PARAMA JAYA", qrCode: "ARINA-PARAMA-JAYA" },
+            { tujuan: "AUTO2000 MANYAR GRESIK", qrCode: "AUTO2000-MANYAR-GRESIK" },
+            { tujuan: "AUTO2000 TUBAN", qrCode: "AUTO2000-TUBAN" },
+            { tujuan: "AUTO2000 MALANG KAB. (SINGOSARI)", qrCode: "AUTO2000-MALANG-KAB.-(SINGOSARI)" },
+            { tujuan: "AUTO2000 MALANG SOETOYO", qrCode: "AUTO2000-MALANG-SOETOYO" },
+            { tujuan: "AUTO2000 MALANG SUPRIADI", qrCode: "AUTO2000-MALANG-SUPRIADI" },
+            { tujuan: "KARTIKA SARI MOTOR", qrCode: "KARTIKA-SARI-MOTOR" },
+            { tujuan: "AUTO2000 BANYUWANGI", qrCode: "AUTO2000-BANYUWANGI" },
+            { tujuan: "AUTO2000 JEMBER", qrCode: "AUTO2000-JEMBER" },
+            { tujuan: "AUTO2000 PASURUAN", qrCode: "AUTO2000-PASURUAN" },
+            { tujuan: "AUTO2000 PROBOLINGGO", qrCode: "AUTO2000-PROBOLINGGO" },
+            { tujuan: "AUTO2000 JOMBANG", qrCode: "AUTO2000-JOMBANG" },
+            { tujuan: "AUTO2000 KEDIRI", qrCode: "AUTO2000-KEDIRI" },
+            { tujuan: "AUTO2000 KEDIRI SUHARMADJI", qrCode: "AUTO2000-KEDIRI-SUHARMADJI" },
+            { tujuan: "AUTO2000 MADIUN", qrCode: "AUTO2000-MADIUN" }
+        ];
+
         let sjList = [];
         let currentTrip = [];
         let tripActive = false;
         let gpsReady = false, gpsLat = null, gpsLng = null;
         let scannerActive = false, scanLoopId = null;
         let isOnline = false;
+
+        // State untuk check-out
+        let pendingCheckoutIndex = null;
+        let checkoutScannerActive = false;
+        let checkoutScanLoopId = null;
 
         // =============================================
         // INIT
@@ -266,8 +345,6 @@
             document.getElementById("inputSJ").focus();
             setInterval(checkOnlineStatus, 10000);
             syncPending();
-            
-            // Pulihkan perjalanan yang sedang berlangsung (jika ada)
             loadActiveTrip();
         }
 
@@ -307,25 +384,20 @@
         function loadActiveTrip() {
             const saved = localStorage.getItem(ACTIVE_TRIP_KEY);
             if (!saved) return;
-            
             try {
                 const data = JSON.parse(saved);
                 if (data.tripActive && data.currentTrip && data.currentTrip.length > 0) {
                     currentTrip = data.currentTrip;
                     sjList = data.sjList || [];
                     tripActive = data.tripActive;
-                    
-                    // Tampilkan trip section
                     document.getElementById("inputSection").style.display = "none";
                     document.getElementById("sjListSection").classList.remove("show");
                     document.getElementById("tripSection").classList.add("show");
                     document.getElementById("historySection").classList.add("show");
-                    
                     renderTripList();
                     showToast("Perjalanan sebelumnya dipulihkan.");
                 }
             } catch (e) {
-                // Data corrupt, hapus
                 localStorage.removeItem(ACTIVE_TRIP_KEY);
             }
         }
@@ -381,7 +453,8 @@
                 endTime: null,
                 endGPS: null,
                 synced: false,
-                checkinSent: false
+                checkinSent: false,
+                validated: false
             }));
             tripActive = true;
             document.getElementById("inputSection").style.display = "none";
@@ -407,9 +480,10 @@
                 const d = trip.status === 'delivered';
                 const pendingCheckin = !trip.checkinSent;
                 const pendingCheckout = d && !trip.synced;
-                html += `<div class="trip-item ${d ? 'delivered' : ''}" onclick="${d ? '' : `checkOut(${index})`}">
+                const validatedIcon = trip.validated ? ' 🔒' : '';
+                html += `<div class="trip-item ${d ? 'delivered' : ''}" onclick="${d ? '' : `bukaModalCheckout(${index})`}">
                     <div>
-                        <div class="sj-code">📋 ${trip.sj}${pendingCheckin ? '<span class="pending-badge">🟠</span>' : ''}${pendingCheckout ? '<span class="pending-badge">🟠</span>' : ''}</div>
+                        <div class="sj-code">📋 ${trip.sj}${validatedIcon}${pendingCheckin ? '<span class="pending-badge">🟠</span>' : ''}${pendingCheckout ? '<span class="pending-badge">🟠</span>' : ''}</div>
                         <div style="font-size:10px;color:#94A3B8;margin-top:2px;">Mulai: ${trip.checkinTime}</div>
                         ${d ? `<div style="font-size:10px;color:#059669;margin-top:2px;">Tiba: ${trip.endTime}</div>` : ''}
                     </div>
@@ -432,12 +506,156 @@
                         checkinGPS: trip.checkinGPS,
                         endTime: trip.endTime,
                         endGPS: trip.endGPS,
-                        synced: trip.synced
+                        synced: trip.synced,
+                        validated: trip.validated
                     });
                 });
-                // Hapus active trip setelah semua selesai
                 clearActiveTrip();
             }
+        }
+
+        // =============================================
+        // MODAL CHECK-OUT (hanya scan QR)
+        // =============================================
+        function bukaModalCheckout(index) {
+            const trip = currentTrip[index];
+            if (!trip || trip.status === 'delivered') return;
+            pendingCheckoutIndex = index;
+            document.getElementById("modalSJName").textContent = trip.sj;
+            document.getElementById("validationStatus").textContent = "";
+            document.getElementById("validationStatus").className = "validation-status";
+            document.getElementById("checkoutModal").classList.add("show");
+        }
+
+        function closeCheckoutModal() {
+            stopCheckoutScanner();
+            document.getElementById("checkoutModal").classList.remove("show");
+            pendingCheckoutIndex = null;
+        }
+
+        // =============================================
+        // SCAN QR UNTUK VALIDASI CHECK-OUT (SATU-SATUNYA CARA)
+        // =============================================
+        function scanQRUntukCheckout() {
+            const index = pendingCheckoutIndex;
+            if (index === null) return;
+            const trip = currentTrip[index];
+
+            if (!('BarcodeDetector' in window)) {
+                showToast("Browser tidak mendukung scan QR.", true);
+                document.getElementById("validationStatus").textContent = "❌ Browser tidak mendukung scan QR";
+                document.getElementById("validationStatus").className = "validation-status error";
+                return;
+            }
+
+            const container = document.getElementById("qrContainer");
+            stopScanner();
+
+            container.classList.add("show");
+            document.getElementById("btnScan").classList.add("active");
+            document.getElementById("btnScan").textContent = "✕";
+            checkoutScannerActive = true;
+            document.getElementById("validationStatus").textContent = "Arahkan kamera ke QR validasi cabang...";
+            document.getElementById("validationStatus").className = "validation-status";
+
+            const video = document.getElementById("qr-video");
+            const detector = new BarcodeDetector({ formats: ['qr_code'] });
+
+            navigator.mediaDevices.getUserMedia({
+                video: { facingMode: "environment", width: { ideal: 640 }, height: { ideal: 480 } },
+                audio: false
+            })
+            .then(stream => {
+                video.srcObject = stream;
+                video.play();
+                checkoutScanLoop(detector, video, trip);
+            })
+            .catch(() => {
+                document.getElementById("validationStatus").textContent = "❌ Tidak bisa akses kamera.";
+                document.getElementById("validationStatus").className = "validation-status error";
+                stopCheckoutScanner();
+            });
+        }
+
+        function checkoutScanLoop(detector, video, trip) {
+            if (!checkoutScannerActive) return;
+            detector.detect(video).then(codes => {
+                if (codes.length > 0) {
+                    const scannedQR = codes[0].rawValue.trim();
+                    const validationResult = validateQR(scannedQR);
+                    
+                    if (validationResult.valid) {
+                        document.getElementById("validationStatus").textContent = `✅ Validasi berhasil! Tujuan: ${validationResult.tujuan}`;
+                        document.getElementById("validationStatus").className = "validation-status success";
+                        stopCheckoutScanner();
+                        closeCheckoutModal();
+                        trip.validated = true;
+                        trip.validationQR = scannedQR;
+                        trip.validatedTujuan = validationResult.tujuan;
+                        eksekusiCheckout(pendingCheckoutIndex);
+                    } else {
+                        document.getElementById("validationStatus").textContent = `❌ ${validationResult.message}`;
+                        document.getElementById("validationStatus").className = "validation-status error";
+                        checkoutScanLoopId = requestAnimationFrame(() => checkoutScanLoop(detector, video, trip));
+                    }
+                } else {
+                    checkoutScanLoopId = requestAnimationFrame(() => checkoutScanLoop(detector, video, trip));
+                }
+            }).catch(() => {
+                checkoutScanLoopId = requestAnimationFrame(() => checkoutScanLoop(detector, video, trip));
+            });
+        }
+
+        // =============================================
+        // VALIDASI QR CODE (database tujuan & QR code)
+        // =============================================
+        function validateQR(scannedQR) {
+            // Cari di database
+            const entry = VALIDATION_DB.find(v => v.qrCode === scannedQR);
+            
+            if (entry) {
+                return { 
+                    valid: true, 
+                    tujuan: entry.tujuan,
+                    message: `Validasi berhasil - ${entry.tujuan}`
+                };
+            }
+            
+            return { 
+                valid: false, 
+                message: `QR code tidak dikenal. Hubungi admin. (QR: ${scannedQR.substring(0, 30)}...)` 
+            };
+        }
+
+        function stopCheckoutScanner() {
+            checkoutScannerActive = false;
+            if (checkoutScanLoopId) {
+                cancelAnimationFrame(checkoutScanLoopId);
+                checkoutScanLoopId = null;
+            }
+            const video = document.getElementById("qr-video");
+            if (video.srcObject) {
+                video.srcObject.getTracks().forEach(t => t.stop());
+                video.srcObject = null;
+            }
+            document.getElementById("qrContainer").classList.remove("show");
+            const btn = document.getElementById("btnScan");
+            btn.classList.remove("active");
+            btn.textContent = "📷";
+        }
+
+        // =============================================
+        // EKSEKUSI CHECK-OUT
+        // =============================================
+        function eksekusiCheckout(index) {
+            const trip = currentTrip[index];
+            if (!trip || trip.status === 'delivered') return;
+            trip.status = 'delivered';
+            trip.endTime = formatDateTime();
+            trip.endGPS = getGPSString();
+            renderTripList();
+            showToast(`✅ ${trip.sj} telah tiba di ${trip.validatedTujuan || 'tujuan'}.`);
+            kirimCheckoutKeServer(trip, index);
         }
 
         // =============================================
@@ -450,15 +668,9 @@
             }
             try {
                 await fetch(API_URL, {
-                    method: "POST",
-                    mode: "no-cors",
+                    method: "POST", mode: "no-cors",
                     headers: { "Content-Type": "application/json" },
-                    body: JSON.stringify({
-                        sj: trip.sj,
-                        type: 'checkin',
-                        waktuCheckin: trip.checkinTime,
-                        gpsCheckin: trip.checkinGPS
-                    })
+                    body: JSON.stringify({ sj: trip.sj, type: 'checkin', waktuCheckin: trip.checkinTime, gpsCheckin: trip.checkinGPS })
                 });
                 trip.checkinSent = true;
                 renderTripList();
@@ -468,47 +680,34 @@
         }
 
         // =============================================
-        // CHECK-OUT
-        // =============================================
-        function checkOut(index) {
-            const trip = currentTrip[index];
-            if (!trip || trip.status === 'delivered') return;
-            if (!confirm(`Konfirmasi tiba di tujuan untuk:\n${trip.sj}\n\nKlik OK untuk check-out.`)) return;
-            trip.status = 'delivered';
-            trip.endTime = formatDateTime();
-            trip.endGPS = getGPSString();
-            renderTripList();
-            showToast(`✅ ${trip.sj} telah tiba.`);
-            kirimCheckoutKeServer(trip, index);
-        }
-
-        // =============================================
         // KIRIM CHECK-OUT KE SERVER
         // =============================================
         async function kirimCheckoutKeServer(trip, index) {
             if (!isOnline) {
-                addPending({ sj: trip.sj, waktuTiba: trip.endTime, gpsTiba: trip.endGPS, type: 'checkout' });
+                addPending({ sj: trip.sj, waktuTiba: trip.endTime, gpsTiba: trip.endGPS, type: 'checkout', validated: trip.validated, validationQR: trip.validationQR, validatedTujuan: trip.validatedTujuan });
                 renderTripList();
                 showToast("📶 Offline. Data disimpan lokal.");
                 return;
             }
             try {
                 await fetch(API_URL, {
-                    method: "POST",
-                    mode: "no-cors",
+                    method: "POST", mode: "no-cors",
                     headers: { "Content-Type": "application/json" },
-                    body: JSON.stringify({
-                        sj: trip.sj,
-                        type: 'checkout',
-                        waktuTiba: trip.endTime,
-                        gpsTiba: trip.endGPS
+                    body: JSON.stringify({ 
+                        sj: trip.sj, 
+                        type: 'checkout', 
+                        waktuTiba: trip.endTime, 
+                        gpsTiba: trip.endGPS,
+                        validated: trip.validated,
+                        validationQR: trip.validationQR || '',
+                        validatedTujuan: trip.validatedTujuan || ''
                     })
                 });
                 trip.synced = true;
                 renderTripList();
                 showToast(`📡 ${trip.sj} terkirim ke server.`);
             } catch (error) {
-                addPending({ sj: trip.sj, waktuTiba: trip.endTime, gpsTiba: trip.endGPS, type: 'checkout' });
+                addPending({ sj: trip.sj, waktuTiba: trip.endTime, gpsTiba: trip.endGPS, type: 'checkout', validated: trip.validated, validationQR: trip.validationQR, validatedTujuan: trip.validatedTujuan });
                 renderTripList();
                 showToast("❌ Gagal kirim. Data disimpan lokal.", true);
             }
@@ -533,8 +732,7 @@
             for (const item of pending) {
                 try {
                     await fetch(API_URL, {
-                        method: "POST",
-                        mode: "no-cors",
+                        method: "POST", mode: "no-cors",
                         headers: { "Content-Type": "application/json" },
                         body: JSON.stringify(item)
                     });
@@ -557,13 +755,14 @@
         }
 
         // =============================================
-        // QR SCANNER
+        // QR SCANNER (untuk input SJ)
         // =============================================
         function toggleScanner() {
             const container = document.getElementById("qrContainer");
             const btn = document.getElementById("btnScan");
             const statusEl = document.getElementById("scanStatus");
             if (scannerActive) { stopScanner(); return; }
+            if (checkoutScannerActive) { stopCheckoutScanner(); }
             if (!('BarcodeDetector' in window)) { showToast("Browser tidak mendukung scan QR.", true); return; }
             container.classList.add("show"); btn.classList.add("active"); btn.textContent = "✕"; scannerActive = true;
             statusEl.textContent = "Arahkan kamera ke QR code..."; statusEl.className = "scan-status";
@@ -621,7 +820,8 @@
         // RESET
         // =============================================
         function resetForm() {
-            stopScanner(); sjList = []; currentTrip = []; tripActive = false;
+            stopScanner(); stopCheckoutScanner(); closeCheckoutModal();
+            sjList = []; currentTrip = []; tripActive = false;
             document.getElementById("inputSJ").value = "";
             document.getElementById("inputSection").style.display = "block";
             document.getElementById("sjListSection").classList.remove("show");
@@ -665,6 +865,7 @@
                     <div class="times">▶ ${e.checkinTime || e.startTime} → 🏁 ${e.endTime}</div>
                     <div class="gps">📍 Check-in: ${e.checkinGPS || e.startGPS} | Tiba: ${e.endGPS}</div>
                     <div class="sync-status">${e.synced ? '✅ Tersinkron' : '🟠 Belum sinkron'}</div>
+                    ${e.validated ? `<div class="sync-status">🔒 Tervalidasi QR (${e.validatedTujuan || ''})</div>` : ''}
                 </div>
             `).join("");
         }
