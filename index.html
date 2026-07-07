@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
-    <title>TrackORA Driver v3.5</title>
+    <title>TrackORA Driver v3.6</title>
     <style>
         * { margin: 0; padding: 0; box-sizing: border-box; }
 
@@ -183,7 +183,7 @@
 <body>
 
     <div class="app-container">
-        <div class="version-badge">v3.5</div>
+        <div class="version-badge">v3.6</div>
         <div class="online-indicator">
             <div class="online-dot" id="onlineDot"></div>
             <span id="onlineText">Cek koneksi...</span>
@@ -241,7 +241,7 @@
         // =============================================
         // KONFIGURASI
         // =============================================
-        const API_URL = "https://script.google.com/macros/s/AKfycbx3yAbqIKIQxgCeFreOG1Rhrcuz60DDK3PSOe-DKQAjn2bL5jGIuZyP6tkP3qK4L-Ge/exec";
+        const API_URL = "https://script.google.com/macros/s/AKfycbwmTlI6ezXt9tAXijNGICSLNVP9sbzgAsFnGHRcdKtt5Pw4Mn45LXZPTTHrYjz810Ne/exec";
         const STORAGE_KEY = "trackora_driver_history";
         const PENDING_KEY = "trackora_driver_pending";
         const ACTIVE_TRIP_KEY = "trackora_driver_active_trip";
@@ -253,9 +253,6 @@
         let scannerActive = false, scanLoopId = null;
         let isOnline = false;
 
-        // =============================================
-        // INIT
-        // =============================================
         function init() {
             loadHistory();
             requestGPS();
@@ -287,16 +284,9 @@
             }
         }
 
-        // =============================================
-        // ACTIVE TRIP PERSISTENCE
-        // =============================================
         function saveActiveTrip() {
             if (currentTrip.length > 0 && tripActive) {
-                localStorage.setItem(ACTIVE_TRIP_KEY, JSON.stringify({
-                    currentTrip: currentTrip,
-                    sjList: sjList,
-                    tripActive: tripActive
-                }));
+                localStorage.setItem(ACTIVE_TRIP_KEY, JSON.stringify({ currentTrip, sjList, tripActive }));
             }
         }
 
@@ -305,7 +295,7 @@
             if (!saved) return;
             try {
                 const data = JSON.parse(saved);
-                if (data.tripActive && data.currentTrip && data.currentTrip.length > 0) {
+                if (data.tripActive && data.currentTrip?.length > 0) {
                     currentTrip = data.currentTrip;
                     sjList = data.sjList || [];
                     tripActive = data.tripActive;
@@ -316,18 +306,11 @@
                     renderTripList();
                     showToast("Perjalanan sebelumnya dipulihkan.");
                 }
-            } catch (e) {
-                localStorage.removeItem(ACTIVE_TRIP_KEY);
-            }
+            } catch (e) { localStorage.removeItem(ACTIVE_TRIP_KEY); }
         }
 
-        function clearActiveTrip() {
-            localStorage.removeItem(ACTIVE_TRIP_KEY);
-        }
+        function clearActiveTrip() { localStorage.removeItem(ACTIVE_TRIP_KEY); }
 
-        // =============================================
-        // ADD SJ
-        // =============================================
         function addSJ() {
             const sj = document.getElementById("inputSJ").value.trim();
             if (!sj) { showToast("Masukkan No. Surat Jalan", true); return; }
@@ -339,11 +322,7 @@
             showToast(`✅ ${sj} ditambahkan`);
         }
 
-        function removeSJ(index) {
-            sjList.splice(index, 1);
-            renderSJList();
-            showToast("Surat Jalan dihapus");
-        }
+        function removeSJ(index) { sjList.splice(index, 1); renderSJList(); showToast("Surat Jalan dihapus"); }
 
         function renderSJList() {
             const container = document.getElementById("sjList");
@@ -357,23 +336,11 @@
             container.innerHTML = sjList.map((sj, i) => `<div class="sj-list-item"><span>📋 ${sj}</span><span class="remove-sj" onclick="event.stopPropagation();removeSJ(${i})">✕</span></div>`).join("");
         }
 
-        // =============================================
-        // START TRIP
-        // =============================================
         function startTrip() {
             if (sjList.length === 0) { showToast("Tambahkan minimal 1 Surat Jalan", true); return; }
             const startTime = formatDateTime();
             const startGPS = getGPSString();
-            currentTrip = sjList.map(sj => ({
-                sj,
-                status: 'transit',
-                checkinTime: startTime,
-                checkinGPS: startGPS,
-                endTime: null,
-                endGPS: null,
-                synced: false,
-                checkinSent: false
-            }));
+            currentTrip = sjList.map(sj => ({ sj, status: 'transit', checkinTime: startTime, checkinGPS: startGPS, endTime: null, endGPS: null, synced: false, checkinSent: false }));
             tripActive = true;
             document.getElementById("inputSection").style.display = "none";
             document.getElementById("sjListSection").classList.remove("show");
@@ -383,14 +350,9 @@
             renderTripList();
             saveActiveTrip();
             showToast(`${sjList.length} surat jalan dimulai.`);
-            currentTrip.forEach((trip, index) => {
-                kirimData(trip, 'checkin');
-            });
+            currentTrip.forEach(trip => kirimData(trip, 'checkin'));
         }
 
-        // =============================================
-        // RENDER TRIP LIST
-        // =============================================
         function renderTripList() {
             const container = document.getElementById("tripList");
             let html = "";
@@ -413,37 +375,18 @@
             updateSyncButton();
             saveActiveTrip();
 
-            const allDone = currentTrip.every(t => t.status === 'delivered' && t.synced);
-            if (allDone) {
+            if (currentTrip.every(t => t.status === 'delivered' && t.synced)) {
                 showToast("Semua surat jalan telah tiba & tersinkron. Trip selesai! 🎉");
-                currentTrip.forEach(trip => {
-                    saveHistory({
-                        sj: trip.sj,
-                        checkinTime: trip.checkinTime,
-                        checkinGPS: trip.checkinGPS,
-                        endTime: trip.endTime,
-                        endGPS: trip.endGPS,
-                        synced: trip.synced
-                    });
-                });
+                currentTrip.forEach(trip => saveHistory({ sj: trip.sj, checkinTime: trip.checkinTime, checkinGPS: trip.checkinGPS, endTime: trip.endTime, endGPS: trip.endGPS, synced: trip.synced }));
                 clearActiveTrip();
             }
         }
 
-        // =============================================
-        // KIRIM DATA KE SERVER (DIPERBAIKI)
-        // =============================================
         async function kirimData(trip, type) {
             const payload = type === 'checkin' ? {
-                sj: trip.sj,
-                type: 'checkin',
-                waktuCheckin: trip.checkinTime,
-                gpsCheckin: trip.checkinGPS
+                sj: trip.sj, type: 'checkin', waktuCheckin: trip.checkinTime, gpsCheckin: trip.checkinGPS
             } : {
-                sj: trip.sj,
-                type: 'checkout',
-                waktuTiba: trip.endTime,
-                gpsTiba: trip.endGPS
+                sj: trip.sj, type: 'checkout', waktuTiba: trip.endTime, gpsTiba: trip.endGPS
             };
 
             if (!isOnline) {
@@ -453,32 +396,29 @@
                 return;
             }
 
+            const formBody = Object.keys(payload)
+                .map(k => encodeURIComponent(k) + '=' + encodeURIComponent(payload[k]))
+                .join('&');
+
             try {
-                const response = await fetch(API_URL, {
+                await fetch(API_URL, {
                     method: "POST",
-                    headers: { "Content-Type": "application/json" },
-                    body: JSON.stringify(payload)
+                    mode: "no-cors",
+                    headers: { "Content-Type": "application/x-www-form-urlencoded" },
+                    body: formBody
                 });
-                
-                if (response.ok) {
-                    if (type === 'checkin') trip.checkinSent = true;
-                    else trip.synced = true;
-                    renderTripList();
-                    console.log(`✅ ${type} terkirim: ${trip.sj}`);
-                    return;
-                }
-                throw new Error(`HTTP ${response.status}`);
+                if (type === 'checkin') trip.checkinSent = true;
+                else trip.synced = true;
+                renderTripList();
+                console.log(`✅ ${type} terkirim: ${trip.sj}`);
             } catch (error) {
-                console.warn(`⚠️ Gagal kirim ${type}: ${error.message}. Disimpan ke pending.`);
+                console.error(`❌ Gagal kirim ${type}:`, error);
                 addPending(payload);
                 if (type === 'checkout') renderTripList();
                 showToast("❌ Gagal kirim. Data disimpan lokal.", true);
             }
         }
 
-        // =============================================
-        // CHECK-OUT
-        // =============================================
         function checkOut(index) {
             const trip = currentTrip[index];
             if (!trip || trip.status === 'delivered') return;
@@ -491,9 +431,6 @@
             kirimData(trip, 'checkout');
         }
 
-        // =============================================
-        // PENDING QUEUE
-        // =============================================
         function addPending(item) {
             const pending = JSON.parse(localStorage.getItem(PENDING_KEY) || "[]");
             pending.push({ ...item, timestamp: formatDateTime() });
@@ -508,14 +445,10 @@
             showToast(`Mengirim ${pending.length} data...`);
             let success = 0;
             for (const item of pending) {
+                const formBody = Object.keys(item).map(k => encodeURIComponent(k) + '=' + encodeURIComponent(item[k])).join('&');
                 try {
-                    const response = await fetch(API_URL, {
-                        method: "POST",
-                        headers: { "Content-Type": "application/json" },
-                        body: JSON.stringify(item)
-                    });
-                    if (response.ok) { success++; }
-                    else { break; }
+                    await fetch(API_URL, { method: "POST", mode: "no-cors", headers: { "Content-Type": "application/x-www-form-urlencoded" }, body: formBody });
+                    success++;
                 } catch (e) { break; }
             }
             if (success > 0) {
@@ -527,25 +460,17 @@
                 });
                 renderTripList();
                 showToast(`✅ ${success} data terkirim.${remaining.length > 0 ? ` ${remaining.length} gagal.` : ''}`);
-            } else {
-                showToast("❌ Gagal kirim.", true);
-            }
+            } else showToast("❌ Gagal kirim.", true);
             updateSyncButton();
         }
 
-        // =============================================
-        // QR SCANNER
-        // =============================================
         function toggleScanner() {
-            const container = document.getElementById("qrContainer");
-            const btn = document.getElementById("btnScan");
-            const statusEl = document.getElementById("scanStatus");
+            const container = document.getElementById("qrContainer"), btn = document.getElementById("btnScan"), statusEl = document.getElementById("scanStatus");
             if (scannerActive) { stopScanner(); return; }
             if (!('BarcodeDetector' in window)) { showToast("Browser tidak mendukung scan QR.", true); return; }
             container.classList.add("show"); btn.classList.add("active"); btn.textContent = "✕"; scannerActive = true;
             statusEl.textContent = "Arahkan kamera ke QR code..."; statusEl.className = "scan-status";
-            const video = document.getElementById("qr-video");
-            const detector = new BarcodeDetector({ formats: ['qr_code'] });
+            const video = document.getElementById("qr-video"), detector = new BarcodeDetector({ formats: ['qr_code'] });
             navigator.mediaDevices.getUserMedia({ video: { facingMode: "environment", width: { ideal: 640 }, height: { ideal: 480 } }, audio: false })
                 .then(stream => { video.srcObject = stream; video.play(); scanLoop(detector, video); })
                 .catch(() => { statusEl.textContent = "❌ Tidak bisa akses kamera."; statusEl.className = "scan-status error"; stopScanner(); });
@@ -554,105 +479,41 @@
         function scanLoop(detector, video) {
             if (!scannerActive) return;
             detector.detect(video).then(codes => {
-                if (codes.length > 0) {
-                    document.getElementById("inputSJ").value = codes[0].rawValue;
-                    document.getElementById("scanStatus").textContent = `✅ Terbaca: ${codes[0].rawValue}`;
-                    document.getElementById("scanStatus").className = "scan-status success";
-                    showToast(`Terbaca: ${codes[0].rawValue}`);
-                    stopScanner();
-                    setTimeout(() => addSJ(), 500);
-                } else scanLoopId = requestAnimationFrame(() => scanLoop(detector, video));
+                if (codes.length > 0) { document.getElementById("inputSJ").value = codes[0].rawValue; document.getElementById("scanStatus").textContent = `✅ Terbaca: ${codes[0].rawValue}`; document.getElementById("scanStatus").className = "scan-status success"; showToast(`Terbaca: ${codes[0].rawValue}`); stopScanner(); setTimeout(() => addSJ(), 500); }
+                else scanLoopId = requestAnimationFrame(() => scanLoop(detector, video));
             }).catch(() => { scanLoopId = requestAnimationFrame(() => scanLoop(detector, video)); });
         }
 
         function stopScanner() {
-            scannerActive = false;
-            if (scanLoopId) { cancelAnimationFrame(scanLoopId); scanLoopId = null; }
-            const video = document.getElementById("qr-video");
-            if (video.srcObject) { video.srcObject.getTracks().forEach(t => t.stop()); video.srcObject = null; }
-            document.getElementById("qrContainer").classList.remove("show");
-            const btn = document.getElementById("btnScan"); btn.classList.remove("active"); btn.textContent = "📷";
+            scannerActive = false; if (scanLoopId) { cancelAnimationFrame(scanLoopId); scanLoopId = null; }
+            const video = document.getElementById("qr-video"); if (video.srcObject) { video.srcObject.getTracks().forEach(t => t.stop()); video.srcObject = null; }
+            document.getElementById("qrContainer").classList.remove("show"); document.getElementById("btnScan").classList.remove("active"); document.getElementById("btnScan").textContent = "📷";
         }
 
-        // =============================================
-        // GPS
-        // =============================================
         function requestGPS() {
             const dot = document.getElementById("gpsDot"), text = document.getElementById("gpsText");
             if (!navigator.geolocation) { text.textContent = "GPS tidak tersedia"; return; }
             text.textContent = "Mengambil lokasi...";
-            navigator.geolocation.getCurrentPosition(pos => {
-                gpsLat = pos.coords.latitude; gpsLng = pos.coords.longitude; gpsReady = true;
-                dot.classList.add("active"); text.textContent = `Lokasi siap (±${Math.round(pos.coords.accuracy)}m)`;
-            }, () => { gpsReady = false; dot.classList.remove("active"); text.textContent = "GPS tidak dapat diakses."; }, { enableHighAccuracy: true, timeout: 10000, maximumAge: 60000 });
+            navigator.geolocation.getCurrentPosition(pos => { gpsLat = pos.coords.latitude; gpsLng = pos.coords.longitude; gpsReady = true; dot.classList.add("active"); text.textContent = `Lokasi siap (±${Math.round(pos.coords.accuracy)}m)`; }, () => { gpsReady = false; dot.classList.remove("active"); text.textContent = "GPS tidak dapat diakses."; }, { enableHighAccuracy: true, timeout: 10000, maximumAge: 60000 });
         }
 
         function getGPSString() { return gpsReady && gpsLat !== null ? `${gpsLat.toFixed(6)}, ${gpsLng.toFixed(6)}` : "GPS tidak tersedia"; }
 
-        function formatDateTime() {
-            const now = new Date();
-            return `${String(now.getDate()).padStart(2,'0')}/${String(now.getMonth()+1).padStart(2,'0')}/${now.getFullYear()} ${String(now.getHours()).padStart(2,'0')}:${String(now.getMinutes()).padStart(2,'0')}:${String(now.getSeconds()).padStart(2,'0')}`;
-        }
+        function formatDateTime() { const now = new Date(); return `${String(now.getDate()).padStart(2,'0')}/${String(now.getMonth()+1).padStart(2,'0')}/${now.getFullYear()} ${String(now.getHours()).padStart(2,'0')}:${String(now.getMinutes()).padStart(2,'0')}:${String(now.getSeconds()).padStart(2,'0')}`; }
 
-        // =============================================
-        // RESET
-        // =============================================
         function resetForm() {
             stopScanner(); sjList = []; currentTrip = []; tripActive = false;
-            document.getElementById("inputSJ").value = "";
-            document.getElementById("inputSection").style.display = "block";
-            document.getElementById("sjListSection").classList.remove("show");
-            document.getElementById("tripSection").classList.remove("show");
-            document.getElementById("historySection").classList.remove("show");
-            document.getElementById("scanStatus").textContent = "";
-            document.getElementById("scanStatus").className = "scan-status";
-            document.getElementById("inputSJ").focus();
-            clearActiveTrip();
-            requestGPS(); updateSyncButton();
-            showToast("Form di-reset.");
+            document.getElementById("inputSJ").value = ""; document.getElementById("inputSection").style.display = "block";
+            document.getElementById("sjListSection").classList.remove("show"); document.getElementById("tripSection").classList.remove("show"); document.getElementById("historySection").classList.remove("show");
+            document.getElementById("scanStatus").textContent = ""; document.getElementById("scanStatus").className = "scan-status";
+            document.getElementById("inputSJ").focus(); clearActiveTrip(); requestGPS(); updateSyncButton(); showToast("Form di-reset.");
         }
 
-        // =============================================
-        // HISTORY
-        // =============================================
-        function saveHistory(entry) {
-            const today = new Date().toDateString();
-            let history = JSON.parse(localStorage.getItem(STORAGE_KEY) || "{}");
-            if (!history[today]) history[today] = [];
-            history[today].unshift(entry);
-            if (history[today].length > 50) history[today] = history[today].slice(0, 50);
-            const keys = Object.keys(history);
-            if (keys.length > 7) delete history[keys.sort()[0]];
-            localStorage.setItem(STORAGE_KEY, JSON.stringify(history));
-            loadHistory();
-        }
+        function saveHistory(entry) { const today = new Date().toDateString(); let history = JSON.parse(localStorage.getItem(STORAGE_KEY) || "{}"); if (!history[today]) history[today] = []; history[today].unshift(entry); if (history[today].length > 50) history[today] = history[today].slice(0, 50); const keys = Object.keys(history); if (keys.length > 7) delete history[keys.sort()[0]]; localStorage.setItem(STORAGE_KEY, JSON.stringify(history)); loadHistory(); }
 
-        function loadHistory() {
-            const today = new Date().toDateString();
-            const history = JSON.parse(localStorage.getItem(STORAGE_KEY) || "{}");
-            const todayHistory = history[today] || [];
-            const container = document.getElementById("historyList");
-            if (todayHistory.length === 0) {
-                container.innerHTML = '<div class="history-empty">Belum ada pengiriman hari ini</div>';
-                return;
-            }
-            container.innerHTML = todayHistory.map(e => `
-                <div class="history-item">
-                    <div class="sj">📋 ${e.sj}</div>
-                    <div class="times">▶ ${e.checkinTime || e.startTime} → 🏁 ${e.endTime}</div>
-                    <div class="gps">📍 Check-in: ${e.checkinGPS || e.startGPS} | Tiba: ${e.endGPS}</div>
-                    <div class="sync-status">${e.synced ? '✅ Tersinkron' : '🟠 Belum sinkron'}</div>
-                </div>
-            `).join("");
-        }
+        function loadHistory() { const today = new Date().toDateString(); const history = JSON.parse(localStorage.getItem(STORAGE_KEY) || "{}"); const todayHistory = history[today] || []; const container = document.getElementById("historyList"); if (todayHistory.length === 0) { container.innerHTML = '<div class="history-empty">Belum ada pengiriman hari ini</div>'; return; } container.innerHTML = todayHistory.map(e => `<div class="history-item"><div class="sj">📋 ${e.sj}</div><div class="times">▶ ${e.checkinTime || e.startTime} → 🏁 ${e.endTime}</div><div class="gps">📍 Check-in: ${e.checkinGPS || e.startGPS} | Tiba: ${e.endGPS}</div><div class="sync-status">${e.synced ? '✅ Tersinkron' : '🟠 Belum sinkron'}</div></div>`).join(""); }
 
-        function showToast(message, isError = false) {
-            const toast = document.getElementById("toast");
-            toast.textContent = message;
-            toast.classList.toggle("error", isError);
-            toast.classList.add("show");
-            setTimeout(() => toast.classList.remove("show"), 2500);
-        }
+        function showToast(message, isError = false) { const toast = document.getElementById("toast"); toast.textContent = message; toast.classList.toggle("error", isError); toast.classList.add("show"); setTimeout(() => toast.classList.remove("show"), 2500); }
 
         init();
     </script>
