@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
-    <title>TrackORA Driver v3.4</title>
+    <title>TrackORA Driver v3.5</title>
     <style>
         * { margin: 0; padding: 0; box-sizing: border-box; }
 
@@ -136,9 +136,7 @@
         }
         .btn-sync.show { display: block; }
 
-        .pending-badge {
-            font-size: 10px; color: #D97706; margin-left: 6px;
-        }
+        .pending-badge { font-size: 10px; color: #D97706; margin-left: 6px; }
 
         .history-section {
             margin-top: 28px; border-top: 1px solid #334155; padding-top: 20px; display: none;
@@ -185,7 +183,7 @@
 <body>
 
     <div class="app-container">
-        <div class="version-badge">v3.4</div>
+        <div class="version-badge">v3.5</div>
         <div class="online-indicator">
             <div class="online-dot" id="onlineDot"></div>
             <span id="onlineText">Cek koneksi...</span>
@@ -266,8 +264,6 @@
             document.getElementById("inputSJ").focus();
             setInterval(checkOnlineStatus, 10000);
             syncPending();
-            
-            // Pulihkan perjalanan yang sedang berlangsung (jika ada)
             loadActiveTrip();
         }
 
@@ -307,25 +303,20 @@
         function loadActiveTrip() {
             const saved = localStorage.getItem(ACTIVE_TRIP_KEY);
             if (!saved) return;
-            
             try {
                 const data = JSON.parse(saved);
                 if (data.tripActive && data.currentTrip && data.currentTrip.length > 0) {
                     currentTrip = data.currentTrip;
                     sjList = data.sjList || [];
                     tripActive = data.tripActive;
-                    
-                    // Tampilkan trip section
                     document.getElementById("inputSection").style.display = "none";
                     document.getElementById("sjListSection").classList.remove("show");
                     document.getElementById("tripSection").classList.add("show");
                     document.getElementById("historySection").classList.add("show");
-                    
                     renderTripList();
                     showToast("Perjalanan sebelumnya dipulihkan.");
                 }
             } catch (e) {
-                // Data corrupt, hapus
                 localStorage.removeItem(ACTIVE_TRIP_KEY);
             }
         }
@@ -393,7 +384,7 @@
             saveActiveTrip();
             showToast(`${sjList.length} surat jalan dimulai.`);
             currentTrip.forEach((trip, index) => {
-                kirimCheckinKeServer(trip, index);
+                kirimData(trip, 'checkin');
             });
         }
 
@@ -435,35 +426,53 @@
                         synced: trip.synced
                     });
                 });
-                // Hapus active trip setelah semua selesai
                 clearActiveTrip();
             }
         }
 
         // =============================================
-        // KIRIM CHECK-IN KE SERVER
+        // KIRIM DATA KE SERVER (DIPERBAIKI)
         // =============================================
-        async function kirimCheckinKeServer(trip, index) {
+        async function kirimData(trip, type) {
+            const payload = type === 'checkin' ? {
+                sj: trip.sj,
+                type: 'checkin',
+                waktuCheckin: trip.checkinTime,
+                gpsCheckin: trip.checkinGPS
+            } : {
+                sj: trip.sj,
+                type: 'checkout',
+                waktuTiba: trip.endTime,
+                gpsTiba: trip.endGPS
+            };
+
             if (!isOnline) {
-                addPending({ sj: trip.sj, waktuCheckin: trip.checkinTime, gpsCheckin: trip.checkinGPS, type: 'checkin' });
+                addPending(payload);
+                if (type === 'checkout') renderTripList();
+                showToast("📶 Offline. Data disimpan lokal.");
                 return;
             }
+
             try {
-                await fetch(API_URL, {
+                const response = await fetch(API_URL, {
                     method: "POST",
-                    mode: "no-cors",
                     headers: { "Content-Type": "application/json" },
-                    body: JSON.stringify({
-                        sj: trip.sj,
-                        type: 'checkin',
-                        waktuCheckin: trip.checkinTime,
-                        gpsCheckin: trip.checkinGPS
-                    })
+                    body: JSON.stringify(payload)
                 });
-                trip.checkinSent = true;
-                renderTripList();
+                
+                if (response.ok) {
+                    if (type === 'checkin') trip.checkinSent = true;
+                    else trip.synced = true;
+                    renderTripList();
+                    console.log(`✅ ${type} terkirim: ${trip.sj}`);
+                    return;
+                }
+                throw new Error(`HTTP ${response.status}`);
             } catch (error) {
-                addPending({ sj: trip.sj, waktuCheckin: trip.checkinTime, gpsCheckin: trip.checkinGPS, type: 'checkin' });
+                console.warn(`⚠️ Gagal kirim ${type}: ${error.message}. Disimpan ke pending.`);
+                addPending(payload);
+                if (type === 'checkout') renderTripList();
+                showToast("❌ Gagal kirim. Data disimpan lokal.", true);
             }
         }
 
@@ -479,39 +488,7 @@
             trip.endGPS = getGPSString();
             renderTripList();
             showToast(`✅ ${trip.sj} telah tiba.`);
-            kirimCheckoutKeServer(trip, index);
-        }
-
-        // =============================================
-        // KIRIM CHECK-OUT KE SERVER
-        // =============================================
-        async function kirimCheckoutKeServer(trip, index) {
-            if (!isOnline) {
-                addPending({ sj: trip.sj, waktuTiba: trip.endTime, gpsTiba: trip.endGPS, type: 'checkout' });
-                renderTripList();
-                showToast("📶 Offline. Data disimpan lokal.");
-                return;
-            }
-            try {
-                await fetch(API_URL, {
-                    method: "POST",
-                    mode: "no-cors",
-                    headers: { "Content-Type": "application/json" },
-                    body: JSON.stringify({
-                        sj: trip.sj,
-                        type: 'checkout',
-                        waktuTiba: trip.endTime,
-                        gpsTiba: trip.endGPS
-                    })
-                });
-                trip.synced = true;
-                renderTripList();
-                showToast(`📡 ${trip.sj} terkirim ke server.`);
-            } catch (error) {
-                addPending({ sj: trip.sj, waktuTiba: trip.endTime, gpsTiba: trip.endGPS, type: 'checkout' });
-                renderTripList();
-                showToast("❌ Gagal kirim. Data disimpan lokal.", true);
-            }
+            kirimData(trip, 'checkout');
         }
 
         // =============================================
@@ -532,13 +509,13 @@
             let success = 0;
             for (const item of pending) {
                 try {
-                    await fetch(API_URL, {
+                    const response = await fetch(API_URL, {
                         method: "POST",
-                        mode: "no-cors",
                         headers: { "Content-Type": "application/json" },
                         body: JSON.stringify(item)
                     });
-                    success++;
+                    if (response.ok) { success++; }
+                    else { break; }
                 } catch (e) { break; }
             }
             if (success > 0) {
