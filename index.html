@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
-    <title>TrackORA Driver v3.8</title>
+    <title>TrackORA Driver v4.1</title>
     <style>
         * { margin: 0; padding: 0; box-sizing: border-box; }
 
@@ -138,7 +138,6 @@
 
         .pending-badge { font-size: 10px; color: #D97706; margin-left: 6px; }
 
-        /* Fullscreen QR Scanner Overlay */
         .qr-fullscreen-overlay {
             display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%;
             background: #000; z-index: 3000; flex-direction: column;
@@ -157,9 +156,7 @@
             flex: 1; display: flex; align-items: center; justify-content: center;
             overflow: hidden;
         }
-        .qr-fullscreen-video video {
-            width: 100%; height: 100%; object-fit: cover;
-        }
+        .qr-fullscreen-video video { width: 100%; height: 100%; object-fit: cover; }
         .qr-fullscreen-status {
             padding: 16px; text-align: center; font-size: 14px;
             background: rgba(0,0,0,0.6); min-height: 50px;
@@ -213,7 +210,7 @@
 <body>
 
     <div class="app-container">
-        <div class="version-badge">v3.8</div>
+        <div class="version-badge">v4.1</div>
         <div class="online-indicator">
             <div class="online-dot" id="onlineDot"></div>
             <span id="onlineText">Cek koneksi...</span>
@@ -286,40 +283,14 @@
         // KONFIGURASI
         // =============================================
         const API_URL = "https://script.google.com/macros/s/AKfycbx3yAbqIKIQxgCeFreOG1Rhrcuz60DDK3PSOe-DKQAjn2bL5jGIuZyP6tkP3qK4L-Ge/exec";
+        // URL untuk sheet VALIDASI (SJKB, Tujuan, QR_Code)
+        const VALIDASI_CSV_URL = "https://docs.google.com/spreadsheets/d/e/2PACX-1vRKAaGXzzufPDknUNGa1u3sEEt_Py0lUS8PJKslvYt7b5Y5IgzklmLg10BkIz3uStTbR83hjinxZc7V/pub?gid=VALIDASI_SHEET_ID&single=true&output=csv";
+        
         const STORAGE_KEY = "trackora_driver_history";
         const PENDING_KEY = "trackora_driver_pending";
         const ACTIVE_TRIP_KEY = "trackora_driver_active_trip";
 
-        const VALIDATION_DB = [
-            { tujuan: "AUTO NUSA ABADI", qrCode: "AUTO-NUSA-ABADI" },
-            { tujuan: "CV. ANA WAINGAPU", qrCode: "AUTO-NUSA-ABADI" },
-            { tujuan: "AUTO2000 A. YANI", qrCode: "AUTO2000-A.-YANI" },
-            { tujuan: "AUTO2000 HR MOHAMMAD", qrCode: "AUTO2000-HR-MOHAMMAD" },
-            { tujuan: "AUTO2000 JEMUR SARI", qrCode: "AUTO2000-JEMUR-SARI" },
-            { tujuan: "AUTO2000 KENJERAN", qrCode: "AUTO2000-KENJERAN" },
-            { tujuan: "BP AUTO2000 KENJERAN", qrCode: "AUTO2000-KENJERAN" },
-            { tujuan: "AUTO2000 KERTAJAYA", qrCode: "AUTO2000-KERTAJAYA" },
-            { tujuan: "AUTO2000 WIYUNG", qrCode: "AUTO2000-WIYUNG" },
-            { tujuan: "GUDANG KETINTANG", qrCode: "GUDANG-KETINTANG" },
-            { tujuan: "SINAR SURI MANOKWARI", qrCode: "SINAR-SURI-MANOKWARI" },
-            { tujuan: "AUTO2000 WARU", qrCode: "AUTO2000-WARU" },
-            { tujuan: "ARINA PARAMA JAYA", qrCode: "ARINA-PARAMA-JAYA" },
-            { tujuan: "AUTO2000 MANYAR GRESIK", qrCode: "AUTO2000-MANYAR-GRESIK" },
-            { tujuan: "AUTO2000 TUBAN", qrCode: "AUTO2000-TUBAN" },
-            { tujuan: "AUTO2000 MALANG KAB. (SINGOSARI)", qrCode: "AUTO2000-MALANG-KAB.-(SINGOSARI)" },
-            { tujuan: "AUTO2000 MALANG SOETOYO", qrCode: "AUTO2000-MALANG-SOETOYO" },
-            { tujuan: "AUTO2000 MALANG SUPRIADI", qrCode: "AUTO2000-MALANG-SUPRIADI" },
-            { tujuan: "KARTIKA SARI MOTOR", qrCode: "KARTIKA-SARI-MOTOR" },
-            { tujuan: "AUTO2000 BANYUWANGI", qrCode: "AUTO2000-BANYUWANGI" },
-            { tujuan: "AUTO2000 JEMBER", qrCode: "AUTO2000-JEMBER" },
-            { tujuan: "AUTO2000 PASURUAN", qrCode: "AUTO2000-PASURUAN" },
-            { tujuan: "AUTO2000 PROBOLINGGO", qrCode: "AUTO2000-PROBOLINGGO" },
-            { tujuan: "AUTO2000 JOMBANG", qrCode: "AUTO2000-JOMBANG" },
-            { tujuan: "AUTO2000 KEDIRI", qrCode: "AUTO2000-KEDIRI" },
-            { tujuan: "AUTO2000 KEDIRI SUHARMADJI", qrCode: "AUTO2000-KEDIRI-SUHARMADJI" },
-            { tujuan: "AUTO2000 MADIUN", qrCode: "AUTO2000-MADIUN" }
-        ];
-
+        let validationDB = []; // Akan diisi dari Google Sheets
         let sjList = [];
         let currentTrip = [];
         let tripActive = false;
@@ -334,15 +305,96 @@
         // =============================================
         // INIT
         // =============================================
-        function init() {
+        async function init() {
             loadHistory();
             requestGPS();
             checkOnlineStatus();
             document.getElementById("inputSJ").addEventListener("keypress", e => { if (e.key === "Enter") addSJ(); });
             document.getElementById("inputSJ").focus();
             setInterval(checkOnlineStatus, 10000);
+            
+            // Fetch database validasi dari Google Sheets
+            await fetchValidationDB();
+            
             syncPending();
             loadActiveTrip();
+        }
+
+        async function fetchValidationDB() {
+            try {
+                const response = await fetch(VALIDASI_CSV_URL);
+                const csvText = await response.text();
+                validationDB = parseValidationCSV(csvText);
+                console.log(`✅ Database validasi: ${validationDB.length} entries`);
+            } catch (error) {
+                console.warn("⚠️ Gagal fetch database validasi, menggunakan fallback lokal");
+                // Fallback ke database lokal jika fetch gagal
+                validationDB = getLocalValidationDB();
+            }
+        }
+
+        function parseValidationCSV(csvText) {
+            const lines = csvText.trim().split("\n");
+            if (lines.length < 2) return getLocalValidationDB();
+            
+            const result = [];
+            // Skip header (baris 1)
+            for (let i = 1; i < lines.length; i++) {
+                const values = parseCSVLine(lines[i]);
+                if (values.length >= 3) {
+                    const sj = values[0]?.trim() || "";
+                    const tujuan = values[1]?.trim() || "";
+                    const qrCode = values[2]?.trim() || "";
+                    if (sj && tujuan && qrCode) {
+                        result.push({ sj, tujuan, qrCode });
+                    }
+                }
+            }
+            return result.length > 0 ? result : getLocalValidationDB();
+        }
+
+        function parseCSVLine(line) {
+            const result = [];
+            let current = "";
+            let inQuotes = false;
+            for (let char of line) {
+                if (char === '"') { inQuotes = !inQuotes; }
+                else if (char === ',' && !inQuotes) { result.push(current); current = ""; }
+                else { current += char; }
+            }
+            result.push(current);
+            return result;
+        }
+
+        function getLocalValidationDB() {
+            // Fallback: database validasi lokal
+            return [
+                { sj: "", tujuan: "AUTO NUSA ABADI", qrCode: "AUTO-NUSA-ABADI" },
+                { sj: "", tujuan: "AUTO2000 A. YANI", qrCode: "AUTO2000-A.-YANI" },
+                { sj: "", tujuan: "AUTO2000 HR MOHAMMAD", qrCode: "AUTO2000-HR-MOHAMMAD" },
+                { sj: "", tujuan: "AUTO2000 JEMUR SARI", qrCode: "AUTO2000-JEMUR-SARI" },
+                { sj: "", tujuan: "AUTO2000 KENJERAN", qrCode: "AUTO2000-KENJERAN" },
+                { sj: "", tujuan: "AUTO2000 KERTAJAYA", qrCode: "AUTO2000-KERTAJAYA" },
+                { sj: "", tujuan: "AUTO2000 WIYUNG", qrCode: "AUTO2000-WIYUNG" },
+                { sj: "", tujuan: "GUDANG KETINTANG", qrCode: "GUDANG-KETINTANG" },
+                { sj: "", tujuan: "SINAR SURI MANOKWARI", qrCode: "SINAR-SURI-MANOKWARI" },
+                { sj: "", tujuan: "AUTO2000 WARU", qrCode: "AUTO2000-WARU" },
+                { sj: "", tujuan: "ARINA PARAMA JAYA", qrCode: "ARINA-PARAMA-JAYA" },
+                { sj: "", tujuan: "AUTO2000 MANYAR GRESIK", qrCode: "AUTO2000-MANYAR-GRESIK" },
+                { sj: "", tujuan: "AUTO2000 TUBAN", qrCode: "AUTO2000-TUBAN" },
+                { sj: "", tujuan: "AUTO2000 MALANG KAB. (SINGOSARI)", qrCode: "AUTO2000-MALANG-KAB.-(SINGOSARI)" },
+                { sj: "", tujuan: "AUTO2000 MALANG SOETOYO", qrCode: "AUTO2000-MALANG-SOETOYO" },
+                { sj: "", tujuan: "AUTO2000 MALANG SUPRIADI", qrCode: "AUTO2000-MALANG-SUPRIADI" },
+                { sj: "", tujuan: "KARTIKA SARI MOTOR", qrCode: "KARTIKA-SARI-MOTOR" },
+                { sj: "", tujuan: "AUTO2000 BANYUWANGI", qrCode: "AUTO2000-BANYUWANGI" },
+                { sj: "", tujuan: "AUTO2000 JEMBER", qrCode: "AUTO2000-JEMBER" },
+                { sj: "", tujuan: "AUTO2000 PASURUAN", qrCode: "AUTO2000-PASURUAN" },
+                { sj: "", tujuan: "AUTO2000 PROBOLINGGO", qrCode: "AUTO2000-PROBOLINGGO" },
+                { sj: "", tujuan: "AUTO2000 JOMBANG", qrCode: "AUTO2000-JOMBANG" },
+                { sj: "", tujuan: "AUTO2000 KEDIRI", qrCode: "AUTO2000-KEDIRI" },
+                { sj: "", tujuan: "AUTO2000 KEDIRI SUHARMADJI", qrCode: "AUTO2000-KEDIRI-SUHARMADJI" },
+                { sj: "", tujuan: "AUTO2000 MADIUN", qrCode: "AUTO2000-MADIUN" }
+            ];
         }
 
         function checkOnlineStatus() {
@@ -476,7 +528,7 @@
         }
 
         // =============================================
-        // FULLSCREEN QR SCANNER (CHECKOUT)
+        // FULLSCREEN QR SCANNER (CHECKOUT) - DATABASE DRIVEN
         // =============================================
         function scanQRUntukCheckout(index) {
             const trip = currentTrip[index];
@@ -490,7 +542,6 @@
             pendingCheckoutIndex = index;
             stopScanner();
 
-            // Tampilkan fullscreen overlay
             const overlay = document.getElementById("qrFullscreen");
             const statusEl = document.getElementById("qrFullscreenStatus");
             overlay.classList.add("show");
@@ -522,15 +573,21 @@
             detector.detect(video).then(codes => {
                 if (codes.length > 0) {
                     const scannedQR = codes[0].rawValue.trim();
-                    const validationResult = validateQR(scannedQR);
+                    const validationResult = validateQRFromDB(scannedQR, trip.sj);
 
                     if (validationResult.valid) {
+                        const tujuan = validationResult.tujuan;
                         const statusEl = document.getElementById("qrFullscreenStatus");
-                        statusEl.textContent = `✅ Validasi berhasil! Tujuan: ${validationResult.tujuan}`;
+                        statusEl.innerHTML = `✅ Tervalidasi: <strong>${tujuan}</strong>`;
                         statusEl.className = "qr-fullscreen-status success";
+                        
+                        fullscreenScannerActive = false;
+                        if (fullscreenScanLoopId) { cancelAnimationFrame(fullscreenScanLoopId); fullscreenScanLoopId = null; }
+                        
                         trip.validated = true;
                         trip.validationQR = scannedQR;
-                        trip.validatedTujuan = validationResult.tujuan;
+                        trip.validatedTujuan = tujuan;
+                        
                         setTimeout(() => {
                             closeFullscreenScanner();
                             eksekusiCheckout(pendingCheckoutIndex);
@@ -557,9 +614,30 @@
             document.getElementById("qrFullscreen").classList.remove("show");
         }
 
-        function validateQR(scannedQR) {
-            const entry = VALIDATION_DB.find(v => v.qrCode === scannedQR);
-            if (entry) return { valid: true, tujuan: entry.tujuan, message: `Validasi berhasil - ${entry.tujuan}` };
+        // =============================================
+        // VALIDASI QR DARI DATABASE
+        // =============================================
+        function validateQRFromDB(scannedQR, sj) {
+            // Level 1: Cari berdasarkan SJ spesifik dulu
+            const exactMatch = validationDB.find(v => v.sj === sj && v.qrCode === scannedQR);
+            if (exactMatch) {
+                return { valid: true, tujuan: exactMatch.tujuan, message: `Validasi berhasil - ${exactMatch.tujuan}` };
+            }
+            
+            // Level 2: Cari QR code di database (tanpa cek SJ)
+            const qrMatch = validationDB.find(v => v.qrCode === scannedQR);
+            if (qrMatch) {
+                // QR code dikenal, tapi apakah untuk SJ yang benar?
+                if (qrMatch.sj === "" || qrMatch.sj === sj) {
+                    return { valid: true, tujuan: qrMatch.tujuan, message: `Validasi berhasil - ${qrMatch.tujuan}` };
+                } else {
+                    return { 
+                        valid: false, 
+                        message: `QR ini untuk SJ ${qrMatch.sj}, bukan ${sj}. Hubungi admin.` 
+                    };
+                }
+            }
+            
             return { valid: false, message: `QR code tidak dikenal. Hubungi admin. (QR: ${scannedQR.substring(0, 30)}...)` };
         }
 
@@ -575,22 +653,40 @@
         }
 
         // =============================================
-        // KIRIM CHECK-IN
+        // KIRIM CHECK-IN / CHECK-OUT
         // =============================================
         async function kirimCheckinKeServer(trip, index) {
             if (!isOnline) { addPending({ sj: trip.sj, waktuCheckin: trip.checkinTime, gpsCheckin: trip.checkinGPS, type: 'checkin' }); return; }
             try {
-                await fetch(API_URL, { method: "POST", mode: "no-cors", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ sj: trip.sj, type: 'checkin', waktuCheckin: trip.checkinTime, gpsCheckin: trip.checkinGPS }) });
-                trip.checkinSent = true; renderTripList();
-            } catch (error) { addPending({ sj: trip.sj, waktuCheckin: trip.checkinTime, gpsCheckin: trip.checkinGPS, type: 'checkin' }); }
+                const response = await fetch(API_URL, {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify({ sj: trip.sj, type: 'checkin', waktuCheckin: trip.checkinTime, gpsCheckin: trip.checkinGPS })
+                });
+                if (response.ok) { trip.checkinSent = true; renderTripList(); }
+                else throw new Error("Server error");
+            } catch (error) {
+                addPending({ sj: trip.sj, waktuCheckin: trip.checkinTime, gpsCheckin: trip.checkinGPS, type: 'checkin' });
+            }
         }
 
         async function kirimCheckoutKeServer(trip, index) {
             if (!isOnline) { addPending({ sj: trip.sj, waktuTiba: trip.endTime, gpsTiba: trip.endGPS, type: 'checkout', validated: trip.validated, validationQR: trip.validationQR, validatedTujuan: trip.validatedTujuan }); renderTripList(); showToast("📶 Offline. Data disimpan lokal."); return; }
             try {
-                await fetch(API_URL, { method: "POST", mode: "no-cors", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ sj: trip.sj, type: 'checkout', waktuTiba: trip.endTime, gpsTiba: trip.endGPS, validated: trip.validated, validationQR: trip.validationQR || '', validatedTujuan: trip.validatedTujuan || '' }) });
-                trip.synced = true; renderTripList(); showToast(`📡 ${trip.sj} terkirim ke server.`);
-            } catch (error) { addPending({ sj: trip.sj, waktuTiba: trip.endTime, gpsTiba: trip.endGPS, type: 'checkout', validated: trip.validated, validationQR: trip.validationQR, validatedTujuan: trip.validatedTujuan }); renderTripList(); showToast("❌ Gagal kirim. Data disimpan lokal.", true); }
+                const response = await fetch(API_URL, {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify({ 
+                        sj: trip.sj, type: 'checkout', waktuTiba: trip.endTime, gpsTiba: trip.endGPS,
+                        validated: trip.validated, validationQR: trip.validationQR || '', validatedTujuan: trip.validatedTujuan || ''
+                    })
+                });
+                if (response.ok) { trip.synced = true; renderTripList(); showToast(`📡 ${trip.sj} terkirim ke server.`); }
+                else throw new Error("Server error");
+            } catch (error) {
+                addPending({ sj: trip.sj, waktuTiba: trip.endTime, gpsTiba: trip.endGPS, type: 'checkout', validated: trip.validated, validationQR: trip.validationQR, validatedTujuan: trip.validatedTujuan });
+                renderTripList(); showToast("❌ Gagal kirim. Data disimpan lokal.", true);
+            }
         }
 
         function addPending(item) { const pending = JSON.parse(localStorage.getItem(PENDING_KEY) || "[]"); pending.push({ ...item, timestamp: formatDateTime() }); localStorage.setItem(PENDING_KEY, JSON.stringify(pending)); updateSyncButton(); }
@@ -602,13 +698,16 @@
             showToast(`Mengirim ${pending.length} data...`);
             let success = 0;
             for (const item of pending) {
-                try { await fetch(API_URL, { method: "POST", mode: "no-cors", headers: { "Content-Type": "application/json" }, body: JSON.stringify(item) }); success++; } catch (e) { break; }
+                try {
+                    const response = await fetch(API_URL, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(item) });
+                    if (response.ok) success++; else break;
+                } catch (e) { break; }
             }
             if (success > 0) {
                 const remaining = pending.slice(success); localStorage.setItem(PENDING_KEY, JSON.stringify(remaining));
                 currentTrip.forEach(trip => { if (pending.some(p => p.sj === trip.sj && p.type === 'checkin')) trip.checkinSent = true; if (pending.some(p => p.sj === trip.sj && p.type === 'checkout')) trip.synced = true; });
                 renderTripList(); showToast(`✅ ${success} data terkirim.${remaining.length > 0 ? ` ${remaining.length} gagal.` : ''}`);
-            } else { showToast("❌ Gagal kirim.", true); }
+            } else showToast("❌ Gagal kirim.", true);
             updateSyncButton();
         }
 
