@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
-    <title>TrackORA Driver v3.6</title>
+    <title>TrackORA Driver v4.0</title>
     <style>
         * { margin: 0; padding: 0; box-sizing: border-box; }
 
@@ -178,21 +178,77 @@
         .gps-dot { width: 8px; height: 8px; border-radius: 50%; background: #DC2626; }
         .gps-dot.active { background: #059669; animation: pulse-dot 1.5s infinite; }
         @keyframes pulse-dot { 0%, 100% { opacity: 1; } 50% { opacity: 0.3; } }
+
+        /* ===== LOGIN ===== */
+        .login-section { display: none; }
+        .login-section.show { display: block; }
+        .login-section .app-logo { font-size: 44px; text-align: center; margin-bottom: 6px; }
+        .login-section h1 { text-align: center; font-size: 20px; font-weight: 700; color: #F8FAFC; margin-bottom: 24px; }
+        .login-error {
+            font-size: 12px; color: #DC2626; text-align: center; margin-top: 10px; min-height: 16px;
+        }
+        .btn-login {
+            width: 100%; padding: 14px; background: #2563EB; color: white;
+            border: none; border-radius: 8px; font-size: 14px; font-weight: 600;
+            cursor: pointer; margin-top: 6px; transition: background 0.2s;
+        }
+        .btn-login:hover { background: #1D4ED8; }
+        .btn-login:disabled { background: #334155; color: #64748B; cursor: not-allowed; }
+
+        .driver-bar {
+            display: none; justify-content: space-between; align-items: center;
+            background: #0F172A; border: 1px solid #334155; border-radius: 8px;
+            padding: 10px 14px; margin-bottom: 16px; font-size: 12px;
+        }
+        .driver-bar.show { display: flex; }
+        .driver-bar .driver-name { color: #F8FAFC; font-weight: 600; }
+        .driver-bar .driver-name .tag { color: #64748B; font-weight: 400; }
+        .driver-bar .btn-logout {
+            background: none; border: none; color: #DC2626; font-size: 11px;
+            cursor: pointer; font-weight: 600; padding: 4px 6px;
+        }
+
+        .main-app { display: none; }
+        .main-app.show { display: block; }
     </style>
 </head>
 <body>
 
     <div class="app-container">
-        <div class="version-badge">v3.6</div>
+        <div class="version-badge">v4.0</div>
         <div class="online-indicator">
             <div class="online-dot" id="onlineDot"></div>
             <span id="onlineText">Cek koneksi...</span>
         </div>
 
+        <!-- ===== LOGIN SCREEN ===== -->
+        <div class="login-section show" id="loginSection">
+            <div class="app-logo">🚛</div>
+            <h1>TrackORA Driver</h1>
+            <div class="input-group">
+                <label>Username</label>
+                <input type="text" id="loginUsername" placeholder="Username driver" autocomplete="username">
+            </div>
+            <div class="input-group">
+                <label>Password</label>
+                <input type="password" id="loginPassword" placeholder="Password" autocomplete="current-password">
+            </div>
+            <button class="btn-login" id="btnLogin" onclick="doLogin()">Masuk</button>
+            <div class="login-error" id="loginError"></div>
+        </div>
+
+        <!-- ===== MAIN APP (setelah login) ===== -->
+        <div class="main-app" id="mainApp">
+
         <div class="app-header">
             <div class="app-logo">🚛</div>
             <h1>TrackORA Driver</h1>
             <p class="subtitle">Check-in & Check-out Pengiriman</p>
+        </div>
+
+        <div class="driver-bar" id="driverBar">
+            <span class="driver-name"><span class="tag">Driver:</span> <span id="driverNameText">-</span></span>
+            <button class="btn-logout" onclick="doLogout()">Keluar</button>
         </div>
 
         <div class="input-group" id="inputSection">
@@ -224,7 +280,7 @@
             <p style="font-size:12px;color:#94A3B8;margin-bottom:12px;text-align:center;">🟣 Klik SJ untuk check-out | ✅ Tiba | 🟠 Pending sync</p>
             <div id="tripList"></div>
             <div class="btn-row">
-                <button class="btn btn-sync" id="btnSync" onclick="syncPending()">🔄 Sync</button>
+                <button class="btn btn-sync" id="btnSync" onclick="syncPending(true)">🔄 Sync</button>
                 <button class="btn btn-reset" onclick="resetForm()" title="Reset">↺ Trip Baru</button>
             </div>
         </div>
@@ -233,15 +289,24 @@
             <h3>📋 Riwayat Hari Ini</h3>
             <div id="historyList"><div class="history-empty">Belum ada pengiriman hari ini</div></div>
         </div>
+
+        </div><!-- /main-app -->
     </div>
 
     <div class="toast" id="toast"></div>
 
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.js"></script>
     <script>
         // =============================================
         // KONFIGURASI
         // =============================================
-        const API_URL = "https://script.google.com/macros/s/AKfycbwmTlI6ezXt9tAXijNGICSLNVP9sbzgAsFnGHRcdKtt5Pw4Mn45LXZPTTHrYjz810Ne/exec";
+        // Sama dengan project Supabase TrackORA Web — satu backend untuk keduanya.
+        const SUPABASE_URL = 'https://vsbpcjmhugbfedfcueak.supabase.co';
+        const SUPABASE_KEY = 'sb_publishable_b_Z3Xm9r0wlPjr00zyVlRA_J9wpWraf';
+        const EMAIL_DOMAIN = '@trackora.internal'; // username driver dipetakan ke email semu ini
+
+        const supabaseClient = supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
+
         const STORAGE_KEY = "trackora_driver_history";
         const PENDING_KEY = "trackora_driver_pending";
         const ACTIVE_TRIP_KEY = "trackora_driver_active_trip";
@@ -252,16 +317,75 @@
         let gpsReady = false, gpsLat = null, gpsLng = null;
         let scannerActive = false, scanLoopId = null;
         let isOnline = false;
+        let currentDriver = null; // { id, nama }
 
-        function init() {
+        async function init() {
+            checkOnlineStatus();
+            setInterval(checkOnlineStatus, 10000);
+            document.getElementById("loginUsername").addEventListener("keypress", e => { if (e.key === "Enter") document.getElementById("loginPassword").focus(); });
+            document.getElementById("loginPassword").addEventListener("keypress", e => { if (e.key === "Enter") doLogin(); });
+
+            const { data } = await supabaseClient.auth.getSession();
+            if (data.session) {
+                await enterApp(data.session.user.id);
+            } else {
+                document.getElementById("loginSection").classList.add("show");
+                document.getElementById("loginUsername").focus();
+            }
+        }
+
+        async function doLogin() {
+            const username = document.getElementById("loginUsername").value.trim();
+            const password = document.getElementById("loginPassword").value;
+            const errEl = document.getElementById("loginError");
+            const btn = document.getElementById("btnLogin");
+            errEl.textContent = "";
+
+            if (!username || !password) { errEl.textContent = "Isi username dan password."; return; }
+            if (!isOnline) { errEl.textContent = "Perlu koneksi internet untuk login pertama kali."; return; }
+
+            btn.disabled = true; btn.textContent = "Memproses...";
+            const { data, error } = await supabaseClient.auth.signInWithPassword({
+                email: username.toLowerCase() + EMAIL_DOMAIN,
+                password
+            });
+            btn.disabled = false; btn.textContent = "Masuk";
+
+            if (error) { errEl.textContent = "Username atau password salah."; return; }
+            await enterApp(data.user.id);
+        }
+
+        async function enterApp(userId) {
+            const { data: driver, error } = await supabaseClient.from('drivers').select('nama').eq('id', userId).single();
+            if (error || !driver) {
+                await supabaseClient.auth.signOut();
+                document.getElementById("loginError").textContent = "Akun ini belum terdaftar sebagai driver. Hubungi admin.";
+                return;
+            }
+            currentDriver = { id: userId, nama: driver.nama };
+            document.getElementById("loginSection").classList.remove("show");
+            document.getElementById("mainApp").classList.add("show");
+            document.getElementById("driverBar").classList.add("show");
+            document.getElementById("driverNameText").textContent = currentDriver.nama;
+
             loadHistory();
             requestGPS();
-            checkOnlineStatus();
             document.getElementById("inputSJ").addEventListener("keypress", e => { if (e.key === "Enter") addSJ(); });
             document.getElementById("inputSJ").focus();
-            setInterval(checkOnlineStatus, 10000);
             syncPending();
             loadActiveTrip();
+        }
+
+        async function doLogout() {
+            if (tripActive) { showToast("Selesaikan atau reset trip sebelum keluar.", true); return; }
+            if (!confirm("Yakin ingin keluar?")) return;
+            await supabaseClient.auth.signOut();
+            currentDriver = null;
+            document.getElementById("mainApp").classList.remove("show");
+            document.getElementById("driverBar").classList.remove("show");
+            document.getElementById("loginSection").classList.add("show");
+            document.getElementById("loginPassword").value = "";
+            document.getElementById("loginUsername").focus();
         }
 
         function checkOnlineStatus() {
@@ -383,11 +507,7 @@
         }
 
         async function kirimData(trip, type) {
-            const payload = type === 'checkin' ? {
-                sj: trip.sj, type: 'checkin', waktuCheckin: trip.checkinTime, gpsCheckin: trip.checkinGPS
-            } : {
-                sj: trip.sj, type: 'checkout', waktuTiba: trip.endTime, gpsTiba: trip.endGPS
-            };
+            const payload = { sj: trip.sj, type, gps: type === 'checkin' ? trip.checkinGPS : trip.endGPS };
 
             if (!isOnline) {
                 addPending(payload);
@@ -396,17 +516,10 @@
                 return;
             }
 
-            const formBody = Object.keys(payload)
-                .map(k => encodeURIComponent(k) + '=' + encodeURIComponent(payload[k]))
-                .join('&');
-
             try {
-                await fetch(API_URL, {
-                    method: "POST",
-                    mode: "no-cors",
-                    headers: { "Content-Type": "application/x-www-form-urlencoded" },
-                    body: formBody
-                });
+                const rpcName = type === 'checkin' ? 'driver_checkin' : 'driver_checkout';
+                const { error } = await supabaseClient.rpc(rpcName, { p_sjkb: payload.sj, p_gps: payload.gps });
+                if (error) throw error;
                 if (type === 'checkin') trip.checkinSent = true;
                 else trip.synced = true;
                 renderTripList();
@@ -438,16 +551,17 @@
             updateSyncButton();
         }
 
-        async function syncPending() {
-            if (!isOnline) { showToast("📶 Masih offline.", true); return; }
+        async function syncPending(manual = false) {
+            if (!isOnline || !currentDriver) { if (manual) showToast("📶 Masih offline.", true); return; }
             const pending = JSON.parse(localStorage.getItem(PENDING_KEY) || "[]");
-            if (pending.length === 0) { showToast("Tidak ada data pending."); return; }
+            if (pending.length === 0) { if (manual) showToast("Tidak ada data pending."); return; }
             showToast(`Mengirim ${pending.length} data...`);
             let success = 0;
             for (const item of pending) {
-                const formBody = Object.keys(item).map(k => encodeURIComponent(k) + '=' + encodeURIComponent(item[k])).join('&');
+                const rpcName = item.type === 'checkin' ? 'driver_checkin' : 'driver_checkout';
                 try {
-                    await fetch(API_URL, { method: "POST", mode: "no-cors", headers: { "Content-Type": "application/x-www-form-urlencoded" }, body: formBody });
+                    const { error } = await supabaseClient.rpc(rpcName, { p_sjkb: item.sj, p_gps: item.gps });
+                    if (error) throw error;
                     success++;
                 } catch (e) { break; }
             }
